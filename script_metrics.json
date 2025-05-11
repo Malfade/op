@@ -1,0 +1,69 @@
+{
+    "total_scripts_generated": 4,
+    "total_errors_found": 32,
+    "total_errors_fixed": 0,
+    "error_types": {
+        "ps_syntax": 17,
+        "file_access": 2,
+        "other": 7,
+        "bat_syntax": 3,
+        "?:function\\s+Backup-Settings|# Создание резервной копии": 2,
+        "?:before|if": 1
+    },
+    "error_trends": [
+        {
+            "timestamp": "2025-05-11T18:13:17.768989",
+            "model": "claude-3-5-sonnet-20240620",
+            "errors_found": 15,
+            "errors_fixed": 0,
+            "error_types": {
+                "ps_syntax": 10,
+                "file_access": 1,
+                "other": 3,
+                "bat_syntax": 1
+            }
+        },
+        {
+            "timestamp": "2025-05-11T18:19:21.753956",
+            "model": "claude-3-5-sonnet-20240620",
+            "errors_found": 12,
+            "errors_fixed": 0,
+            "error_types": {
+                "ps_syntax": 7,
+                "file_access": 1,
+                "other": 3,
+                "bat_syntax": 1
+            }
+        },
+        {
+            "timestamp": "2025-05-11T18:23:09.714270",
+            "model": "claude-3-5-sonnet-20240620",
+            "errors_found": 2,
+            "errors_fixed": 0,
+            "error_types": {
+                "?:function\\s+Backup-Settings|# Создание резервной копии": 1,
+                "bat_syntax": 1
+            }
+        },
+        {
+            "timestamp": "2025-05-11T18:25:56.878865",
+            "model": "claude-3-5-sonnet-20240620",
+            "errors_found": 3,
+            "errors_fixed": 0,
+            "error_types": {
+                "?:before|if": 1,
+                "?:function\\s+Backup-Settings|# Создание резервной копии": 1,
+                "other": 1
+            }
+        }
+    ],
+    "model_performance": {
+        "claude-3-5-sonnet-20240620": {
+            "total_scripts": 4,
+            "total_errors": 32,
+            "total_fixed": 0,
+            "average_errors_per_script": 8.0
+        }
+    },
+    "last_updated": "2025-05-11T18:25:56.878875"
+}

@@ -1,0 +1,55 @@
+# Конфиденциальные данные и ключи API
+.env
+*.env
+!example.env
+secrets.json
+*.pem
+*.key
+
+# Логи и кэш
+logs/
+*.log
+*.log.*
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Временные файлы
+temp/
+tmp/
+*.tmp
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Виртуальное окружение Python
+venv/
+env/
+ENV/
+.venv/
+.env/
+env.bak/
+venv.bak/
+
+# Дистрибутивы и сборки
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Архивы и сжатые файлы
+*.zip
+*.rar
+*.gz
+*.tar
+*.tgz
+
+# Специфичные для проекта
+*WindowsOptimizer_*.zip
+test_outputs/
+user_data/
+test_images/ 
