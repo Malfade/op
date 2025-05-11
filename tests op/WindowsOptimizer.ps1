@@ -1,174 +1,134 @@
-.SYNOPSIS
-  Скрипт для оптимизации производительности Windows
-.DESCRIPTION
-  Выполняет различные настройки для повышения быстродействия системы,
-  отключает ненужные службы и компоненты, очищает временные файлы.
-  Создан с учетом характеристик системы на основе предоставленного скриншота.
-.PARAMETER BackupPath
-  Путь для сохранения бэкапа параметров
-.EXAMPLE
-  .\WindowsOptimizer.ps1 -BackupPath C:\Backup
-#>
+function Backup-Settings {
+    param($path)
 
-param (
-  [string]$BackupPath = "C:\OptimizeBackup"
-)
+    if (!(Test-Path $path)) {
+        New-Item -ItemType Directory -Path $path | Out-Null
+    }
+    
+    # Бэкап реестра
+    reg export "HKCU\SOFTWARE" "$path\HKCU_SOFTWARE.reg" /y
+    reg export "HKLM\SOFTWARE" "$path\HKLM_SOFTWARE.reg" /y
+    reg export "HKLM\SYSTEM" "$path\HKLM_SYSTEM.reg" /y
 
-# Функция для бэкапа параметров реестра
-function Backup-RegistrySettings {
-  param([string]$RegPath, [string]$SaveName)
-  
-  if (!(Test-Path $BackupPath)) {
-    New-Item -ItemType Directory -Path $BackupPath | Out-Null
-  }
-
-  $dateTime = Get-Date -Format "dd-MM-yy_HH-mm"
-  $backupFile = "$BackupPath\$SaveName $dateTime.reg"
-  
-  Write-Host "Экспорт $RegPath в $backupFile" -ForegroundColor Green
-  try {
-    reg export $RegPath $backupFile | Out-Null
-  }
-  catch {
-    Write-Warning "Ошибка экспорта $RegPath"
-  }
+    # Бэкап файла подкачки
+    Copy-Item -Path "C:\pagefile.sys" -Destination "$path\pagefile.sys" -Force
 }
 
 # Проверка прав администратора
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-if (!($isAdmin)) {
-  Write-Host "Ошибка: скрипт должен запускаться от имени администратора" -ForegroundColor Red
-  Exit
-}
-
-# Лог файл 
-$logFile = "C:\WindowsOptimizer.log"
-"Windows optimization started at $(Get-Date)`n" | Out-File $logFile -Append
-
-# Функция оптимизации производительности
-function Optimize-Performance {
-  # Оптимизация графики и анимаций
-  try {
-    Backup-RegistrySettings "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" "VisualEffectsBackup"
-
-    Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Type DWord -Value 2  
-    New-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "ListviewAlphaSelect" -PropertyType DWord -Value 0 -Force
-    New-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "ListviewShadow" -PropertyType DWord -Value 0 -Force
-    New-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "TaskbarAnimations" -PropertyType DWord -Value 0 -Force
-  }
-  catch {
-    Write-Warning "Ошибка при оптимизации графики"
-    $_ | Out-File $logFile -Append
-  }
-
-  # Отключение Superfetch
-  try {
-    Backup-RegistrySettings "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" "SuperfetchBackup"
-
-    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" -Name "EnableSuperfetch" -Type DWord -Value 0
-    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management\PrefetchParameters" -Name "EnablePrefetcher" -Type DWord -Value 0
-  }
-  catch {
-    Write-Warning "Ошибка отключения Superfetch"
-    $_ | Out-File $logFile -Append
-  }
-
-  # Оптимизация файла подкачки
-  try {
-    Backup-RegistrySettings "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" "PagefileBackup"
-    
-    $mem = Get-WmiObject -Class Win32_OperatingSystem | Select-Object TotalVisibleMemorySize 
-    $pageSize = 4096 + [Math]::Round($mem.TotalVisibleMemorySize/1MB) 
-    $pageSize = [Math]::Min($pageSize, 32768)
-
-    Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management" -Name "PagingFiles" -Type MultiString -Value "C:\pagefile.sys $pageSize $pageSize"
-  }
-  catch {
-    Write-Warning "Ошибка оптимизации файла подкачки"
-    $_ | Out-File $logFile -Append
-  }
-
-  Write-Host "Оптимизация производительности выполнена" -ForegroundColor Green
-}
-
-# Функция отключения ненужных служб
-function Disable-Unused-Services {
-  $services = @(
-    "XblAuthManager"            # Xbox Live Auth Manager
-    "XblGameSave"               # Xbox Live Game Save 
-    "XboxNetApiSvc"             # Xbox Live Networking Service
-    "XboxGipSvc"                # Служба инфраструктуры GRID Xbox
-    "diagnosticshub.standardcollector.service"    # Служба регистрации событий для диагностики Microsoft (для сбора телеметрии)
-    "DiagTrack"                 # Диагностика Microsoft (сбор данных о работе ОС и ПО)
-    "DcpSvc"                    # DataCollectionPublishingService (сбор данных об использовании)
-    "dmwappushservice"          # Служба маршрутизатора push-сообщений WAP
-    "lfsvc"                     # Служба геолокации    
-    "FDResPub"                  # Хост-поставщик функции обнаружения
-    "BcastDVRUserService_7cc0a" # Служба пользователя для сеансов GameDVR и вещания
-    "SysMain"                   # Superfetch
-  )
-
-  foreach ($service in $services) {
-    $servObj = Get-Service -Name $service -ErrorAction SilentlyContinue
-    if ($servObj -and $servObj.StartType -ne "Disabled") {
-      try {
-        Set-Service $service -StartupType Disabled
-        Stop-Service $service -Force -ErrorAction SilentlyContinue
-        Write-Host "Служба $service отключена" -ForegroundColor Green  
-      }
-      catch {
-        Write-Warning "Ошибка отключения службы $service"
-        $_ | Out-File $logFile -Append
-      }
-    }
-  }
-}
-
-# Функция очистки временных файлов
-function Clean-Temp-Files {
-  $tempFolders = @(
-    "C:\Windows\Temp\*"
-    "C:\Windows\Prefetch\*"
-    "C:\Documents and Settings\*\Local Settings\temp\*"
-    "C:\Users\*\Appdata\Local\Temp\*"
-  )
-
-  foreach ($folder in $tempFolders) {
-    try {
-      Remove-Item $folder -Recurse -Force -ErrorAction SilentlyContinue
-    }
-    catch {
-      $_ | Out-File $logFile -Append
-    }
-  }
-
-  Write-Host "Временные файлы очищены" -ForegroundColor Green
+if (!$isAdmin) {
+    Write-Host "Скрипт должен быть запущен от имени администратора. Выход..."
+    Exit
 }
 
 # Оптимизация производительности
-Optimize-Performance
+function Optimize-Performance {
+    try {
+        # Отключение визуальных эффектов
+        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "DragFullWindows" -Value 0
+        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "MenuShowDelay" -Value 0
+        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "UserPreferencesMask" -Value ([byte[]](144,18,3,128,16,0,0,0))
+        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop\WindowMetrics" -Name "MinAnimate" -Value 0
+        Set-ItemProperty -Path "HKCU:\Control Panel\Keyboard" -Name "KeyboardDelay" -Value 0
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "ListviewAlphaSelect" -Value 0
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "ListviewShadow" -Value 0
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" -Name "TaskbarAnimations" -Value 0
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 3
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\DWM" -Name "EnableAeroPeek" -Value 0
+
+        # Отключение индексации
+        Set-Service -Name "WSearch" -StartupType Disabled
+        Stop-Service -Name "WSearch" -WarningAction SilentlyContinue
+
+        # Оптимизация файла подкачки
+        $mem = Get-WmiObject -Class Win32_ComputerSystem | Select-Object TotalPhysicalMemory
+        $memSize = [Math]::Round($mem.TotalPhysicalMemory/1MB)  
+        $recommendedPageSize = [Math]::Round($memSize / 1024 * 1.5) * 1024
+        Set-WmiInstance -Class Win32_PageFileSetting -Arguments @{Name="C:\pagefile.sys"; InitialSize = $recommendedPageSize; MaximumSize = $recommendedPageSize}
+
+        Write-Host "Оптимизация производительности выполнена успешно"
+    }
+    catch {
+        Write-Host "Ошибка при оптимизации производительности: $_"
+    }
+}
+
+# Очистка временных файлов и диска
+function Clean-Disk {
+    # Удаление временных файлов
+    try {
+        Remove-Item -Path "$env:TEMP\*" -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path "$env:windir\Temp\*" -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path "$env:windir\Prefetch\*" -Recurse -Force -ErrorAction SilentlyContinue
+        
+        Write-Host "Временные файлы удалены успешно"  
+    }
+    catch {
+        Write-Host "Ошибка при удалении временных файлов: $_"
+    }
+    
+    # Очистка диска
+    try {
+        cleanmgr /sagerun:1 | Out-Null
+        
+        Write-Host "Очистка диска выполнена успешно" 
+    }
+    catch {
+        Write-Host "Ошибка при очистке диска: $_"
+    }
+}
 
 # Отключение ненужных служб
-Disable-Unused-Services
+function Disable-Services {
+    $services = @(
+        "XblAuthManager",
+        "XblGameSave", 
+        "XboxNetApiSvc",
+        "XboxGipSvc",
+        "WalletService",
+        "RetailDemo",
+        "WbioSrvc",
+        "WerSvc"
+    )
 
-# Очистка временных файлов
-Clean-Temp-Files
+    foreach ($service in $services) {
+        try {
+            if (Get-Service -Name $service -ErrorAction SilentlyContinue) {
+                Set-Service -Name $service -StartupType Disabled
+                Stop-Service -Name $service -WarningAction SilentlyContinue
+            }
+        }
+        catch {
+            Write-Host "Ошибка при отключении службы $service`: $_"
+        }
+    }
 
-# Дефрагментация диска
-try {
-  Write-Host "Запуск дефрагментации диска C:" -ForegroundColor Yellow
-  Optimize-Volume -DriveLetter C -Verbose 
+    Write-Host "Службы отключены успешно"
 }
-catch {
-  Write-Warning "Ошибка дефрагментации диска"
-  $_ | Out-File $logFile -Append
+
+# Логирование действий
+function Write-LogEntry {
+    param($message)
+
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"  
+    Add-Content -Path "optimizer.log" -Value "$timestamp - $message"
 }
 
-# Вывод информации 
-Write-Host "`nВыполненные оптимизации:" -ForegroundColor Cyan
-Write-Host " - Оптимизация производительности (графика, анимации, Superfetch)"
-Write-Host " - Отключение ненужных служб"
-Write-Host " - Очистка временных файлов и дефрагментация диска"
-Write-Host "`nЛог сохранен в файле $logFile"
+# Вызов функций оптимизации
+Write-Host "Создание резервной копии параметров..."
+Backup-Settings -Path "$env:USERPROFILE\SettingsBackup"
+Write-LogEntry "Резервная копия параметров создана"
 
-"Windows optimization finished at $(Get-Date)" | Out-File $logFile -Append
+Write-Host "Оптимизация производительности..."
+Optimize-Performance
+Write-LogEntry "Оптимизация производительности выполнена"
+
+Write-Host "Очистка временных файлов и диска..."
+Clean-Disk
+Write-LogEntry "Очистка временных файлов и диска выполнена"
+
+Write-Host "Отключение ненужных служб..."
+Disable-Services
+Write-LogEntry "Отключение ненужных служб выполнено"
+
+Write-Host "Оптимизация Windows завершена. Подробности см. в файле optimizer.log"
