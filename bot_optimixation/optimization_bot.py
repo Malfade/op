@@ -94,6 +94,10 @@ OPTIMIZATION_PROMPT_TEMPLATE = """Ты эксперт по оптимизаци�
 # Encoding: UTF-8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
+# Set system to use English language for output
+[System.Threading.Thread]::CurrentThread.CurrentUICulture = 'en-US'
+[System.Threading.Thread]::CurrentThread.CurrentCulture = 'en-US'
+
 # Проверка прав администратора
 function Test-Administrator {
     $user = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -102,16 +106,16 @@ function Test-Administrator {
 }
 
 if (-not (Test-Administrator)) {
-    Write-Warning "Этот скрипт требует запуска от имени администратора."
-    Write-Warning "Пожалуйста, запустите скрипт от имени администратора."
+    Write-Warning "This script requires administrator privileges."
+    Write-Warning "Please run the script as administrator."
     pause
     exit
 }
 
 # Настройка логирования
-$LogPath = "$env:TEMP\WindowsOptimizer_Log.txt"
+$LogPath = "$env:TEMP\\WindowsOptimizer_Log.txt"
 Start-Transcript -Path $LogPath -Append -Force
-Write-Host "Логирование настроено. Лог будет сохранен в файл: $LogPath" -ForegroundColor Green
+Write-Host "Logging configured. Log will be saved to: $LogPath" -ForegroundColor Green
 
 # Функция для создания резервных копий настроек
 function Backup-Settings {
@@ -122,23 +126,23 @@ function Backup-Settings {
     
     try {
         # Создаем директорию для резервных копий, если ее нет
-        $BackupDir = "$env:USERPROFILE\WindowsOptimizer_Backups"
+        $BackupDir = "$env:USERPROFILE\\WindowsOptimizer_Backups"
         if (-not (Test-Path -Path $BackupDir)) {
             New-Item -Path $BackupDir -ItemType Directory -Force | Out-Null
         }
         
         # Формируем имя файла резервной копии
         $Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-        $BackupFile = "$BackupDir\${SettingName}_$Timestamp.bak"
+        $BackupFile = "$BackupDir\\${SettingName}_$Timestamp.bak"
         
         # Сохраняем данные в файл
         $Data | Out-File -FilePath $BackupFile -Encoding UTF8 -Force
         
-        Write-Host "Создана резервная копия $SettingName в файле $BackupFile" -ForegroundColor Green
+        Write-Host "Created backup of $SettingName in file $BackupFile" -ForegroundColor Green
         return $BackupFile
     }
     catch {
-        Write-Warning "Не удалось создать резервную копию ${SettingName}: ${_}"
+        Write-Warning "Failed to create backup of ${SettingName}: ${_}"
         return $null
     }
 }
@@ -151,47 +155,170 @@ function Show-Progress {
     )
     
     Write-Progress -Activity $Activity -PercentComplete $PercentComplete
-    Write-Host "[$($Activity)]: $PercentComplete%" -ForegroundColor Cyan
+    Write-Host "[$Activity]: $PercentComplete%" -ForegroundColor Cyan
 }
 
-# Дальше идет твой код оптимизации...
-```
+# Основная функция оптимизации
+function Optimize-Windows {
+    Write-Host "Starting Windows optimization..." -ForegroundColor Green
+    
+    # Отключение ненужных служб
+    Show-Progress -Activity "Optimization" -PercentComplete 10
+    Disable-Services
+    
+    # Очистка диска
+    Show-Progress -Activity "Optimization" -PercentComplete 40
+    Clean-System
+    
+    # Оптимизация производительности
+    Show-Progress -Activity "Optimization" -PercentComplete 70
+    Optimize-Performance
+    
+    Show-Progress -Activity "Optimization" -PercentComplete 100
+    Write-Host "Optimization completed successfully!" -ForegroundColor Green
+}
 
-Для BAT файла:
-```batch
-@echo off
-chcp 65001 >nul
-title Запуск оптимизации Windows
+# Функция для отключения ненужных служб
+function Disable-Services {
+    Write-Host "Disabling unused services..." -ForegroundColor Cyan
+    
+    $services = @(
+        "DiagTrack",          # Телеметрия
+        "dmwappushservice",   # Служба WAP Push
+        "SysMain",            # Superfetch
+        "WSearch"             # Поиск Windows
+    )
+    
+    foreach ($service in $services) {
+        try {
+            $serviceObj = Get-Service -Name $service -ErrorAction SilentlyContinue
+            if ($serviceObj -and $serviceObj.Status -eq "Running") {
+                Stop-Service -Name $service -Force -ErrorAction SilentlyContinue
+                Set-Service -Name $service -StartupType Disabled -ErrorAction SilentlyContinue
+                Write-Host "Service $service successfully disabled" -ForegroundColor Green
+            }
+        }
+        catch {
+            Write-Warning "Failed to disable service ${service}: ${_}"
+        }
+    }
+}
 
-:: Проверка прав администратора
-net session >nul 2>&1
-if %errorlevel% neq 0 (
-    echo Скрипт требует запуска от имени администратора.
-    echo Пожалуйста, запустите этот файл от имени администратора.
-    pause
-    exit /b 1
-)
+# Функция для очистки системы
+function Clean-System {
+    Write-Host "Cleaning system..." -ForegroundColor Cyan
+    
+    try {
+        # Очистка временных файлов
+        if (Test-Path "$env:TEMP") {
+            Remove-Item -Path "$env:TEMP\\*" -Force -Recurse -ErrorAction SilentlyContinue
+            Write-Host "User temporary files folder cleaned" -ForegroundColor Green
+        }
+        
+        if (Test-Path "C:\\Windows\\Temp") {
+            Remove-Item -Path "C:\\Windows\\Temp\\*" -Force -Recurse -ErrorAction SilentlyContinue
+            Write-Host "System temporary files folder cleaned" -ForegroundColor Green
+        }
+        
+        # Очистка корзины
+        try {
+            Clear-RecycleBin -Force -ErrorAction SilentlyContinue
+            Write-Host "Recycle Bin emptied" -ForegroundColor Green
+        } catch {
+            Write-Warning "Failed to empty Recycle Bin: ${_}"
+        }
+        
+        # Очистка кэша обновлений Windows
+        if (Test-Path "C:\\Windows\\SoftwareDistribution") {
+            try {
+                Stop-Service -Name wuauserv -Force -ErrorAction SilentlyContinue
+                Remove-Item -Path "C:\\Windows\\SoftwareDistribution\\Download\\*" -Force -Recurse -ErrorAction SilentlyContinue
+                Start-Service -Name wuauserv -ErrorAction SilentlyContinue
+                Write-Host "Windows Update cache cleaned" -ForegroundColor Green
+            } catch {
+                Write-Warning "Failed to clean Windows Update cache: ${_}"
+            }
+        }
+        
+        Write-Host "System cleaning completed successfully" -ForegroundColor Green
+    }
+    catch {
+        Write-Warning "Error during system cleaning: ${_}"
+    }
+}
 
-echo Запуск скрипта оптимизации Windows...
-echo ==========================================
+# Функция для оптимизации производительности
+function Optimize-Performance {
+    Write-Host "Optimizing performance..." -ForegroundColor Cyan
+    
+    try {
+        # Отключение визуальных эффектов
+        try {
+            # Сохраняем текущие настройки
+            $currentSettings = Get-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -ErrorAction SilentlyContinue
+            if ($currentSettings) {
+                Backup-Settings -SettingName "VisualEffects" -Data ($currentSettings | Out-String)
+            }
+            
+            # Устанавливаем производительность вместо внешнего вида
+            Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -Name "VisualFXSetting" -Type DWord -Value 2 -ErrorAction SilentlyContinue
+            Write-Host "Visual effects set to performance mode" -ForegroundColor Green
+        } catch {
+            Write-Warning "Failed to configure visual effects: ${_}"
+        }
+        
+        # Отключение автозапуска программ
+        try {
+            $startupPath = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+            if (Test-Path $startupPath) {
+                # Сохраняем текущие настройки
+                $currentStartup = Get-ItemProperty -Path $startupPath -ErrorAction SilentlyContinue
+                if ($currentStartup) {
+                    Backup-Settings -SettingName "Autorun" -Data ($currentStartup | Out-String)
+                }
+                
+                $startupItems = Get-ItemProperty -Path $startupPath
+                foreach ($item in $startupItems.PSObject.Properties) {
+                    if ($item.Name -notlike "PS*") {
+                        Write-Host "Disabling autostart: $($item.Name)" -ForegroundColor Yellow
+                        Remove-ItemProperty -Path $startupPath -Name $item.Name -ErrorAction SilentlyContinue
+                    }
+                }
+                Write-Host "Startup items processing completed" -ForegroundColor Green
+            }
+        } catch {
+            Write-Warning "Failed to process startup items: ${_}"
+        }
+        
+        # Настройка плана электропитания на высокую производительность
+        try {
+            $powerSchemes = powercfg /list | Where-Object { $_ -match "высок|High" }
+            if ($powerSchemes) {
+                $highPerfScheme = $powerSchemes -match "высок|High" | Select-Object -First 1
+                if ($highPerfScheme -match "([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})") {
+                    $schemeGuid = $Matches[1]
+                    powercfg /setactive $schemeGuid
+                    Write-Host "High performance power plan activated" -ForegroundColor Green
+                }
+            }
+        } catch {
+            Write-Warning "Failed to configure power plan: ${_}"
+        }
+        
+        Write-Host "Performance optimization completed successfully" -ForegroundColor Green
+    }
+    catch {
+        Write-Warning "Error during performance optimization: ${_}"
+    }
+}
 
-:: Запуск PowerShell скрипта с обходом политики выполнения и правильной кодировкой
-powershell -ExecutionPolicy Bypass -NoProfile -File "WindowsOptimizer.ps1"
+# Запуск основной функции
+Optimize-Windows
 
-echo ==========================================
-echo Скрипт оптимизации выполнен.
+# Остановка логирования
+Stop-Transcript
+Write-Host "Optimization completed. Log saved to file: $LogPath" -ForegroundColor Green
 pause
-```
-
-ВАЖНЫЕ ИНСТРУКЦИИ:
-- Обязательно проверяйте права администратора в начале скрипта
-- Добавляйте обработку ошибок для каждой важной операции
-- Используйте формат ${переменная} в строках с двоеточием
-- Для PowerShell скриптов используйте кодировку UTF-8
-- Убедитесь, что все блоки try имеют соответствующие блоки catch
-- Всегда балансируйте фигурные скобки во всех скриптах
-
-Анализируй предоставленный скриншот и создай оптимизированные скрипты для данной системы.
 """
 
 # Шаблон промпта для исправления ошибок в скрипте
@@ -350,7 +477,7 @@ class OptimizationBot:
                     logger.error(f"Ошибка недостаточного баланса API: {api_error}")
                     error_message = "К сожалению, баланс API-кредитов исчерпан. Пожалуйста, обратитесь к администратору для пополнения баланса."
                     error_message += "\n\nПока что будет использован резервный подход с шаблонными скриптами."
-                    await bot.send_message(message.chat.id, error_message)
+                    bot.send_message(message.chat.id, error_message)
                     
                     # Используем альтернативный подход с шаблонами
                     files = self._get_template_scripts()
@@ -420,6 +547,10 @@ class OptimizationBot:
         template_files["WindowsOptimizer.ps1"] = """# Encoding: UTF-8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
+# Set system to use English language for output
+[System.Threading.Thread]::CurrentThread.CurrentUICulture = 'en-US'
+[System.Threading.Thread]::CurrentThread.CurrentCulture = 'en-US'
+
 # Проверка прав администратора
 function Test-Administrator {
     $user = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -428,8 +559,8 @@ function Test-Administrator {
 }
 
 if (-not (Test-Administrator)) {
-    Write-Warning "Этот скрипт требует запуска от имени администратора."
-    Write-Warning "Пожалуйста, запустите скрипт от имени администратора."
+    Write-Warning "This script requires administrator privileges."
+    Write-Warning "Please run the script as administrator."
     pause
     exit
 }
@@ -437,7 +568,7 @@ if (-not (Test-Administrator)) {
 # Настройка логирования
 $LogPath = "$env:TEMP\\WindowsOptimizer_Log.txt"
 Start-Transcript -Path $LogPath -Append -Force
-Write-Host "Логирование настроено. Лог будет сохранен в файл: $LogPath" -ForegroundColor Green
+Write-Host "Logging configured. Log will be saved to: $LogPath" -ForegroundColor Green
 
 # Функция для создания резервных копий настроек
 function Backup-Settings {
@@ -460,11 +591,11 @@ function Backup-Settings {
         # Сохраняем данные в файл
         $Data | Out-File -FilePath $BackupFile -Encoding UTF8 -Force
         
-        Write-Host "Создана резервная копия $SettingName в файле $BackupFile" -ForegroundColor Green
+        Write-Host "Created backup of $SettingName in file $BackupFile" -ForegroundColor Green
         return $BackupFile
     }
     catch {
-        Write-Warning "Не удалось создать резервную копию ${SettingName}: ${_}"
+        Write-Warning "Failed to create backup of ${SettingName}: ${_}"
         return $null
     }
 }
@@ -482,27 +613,27 @@ function Show-Progress {
 
 # Основная функция оптимизации
 function Optimize-Windows {
-    Write-Host "Запуск оптимизации Windows..." -ForegroundColor Green
+    Write-Host "Starting Windows optimization..." -ForegroundColor Green
     
     # Отключение ненужных служб
-    Show-Progress -Activity "Оптимизация" -PercentComplete 10
+    Show-Progress -Activity "Optimization" -PercentComplete 10
     Disable-Services
     
     # Очистка диска
-    Show-Progress -Activity "Оптимизация" -PercentComplete 40
+    Show-Progress -Activity "Optimization" -PercentComplete 40
     Clean-System
     
     # Оптимизация производительности
-    Show-Progress -Activity "Оптимизация" -PercentComplete 70
+    Show-Progress -Activity "Optimization" -PercentComplete 70
     Optimize-Performance
     
-    Show-Progress -Activity "Оптимизация" -PercentComplete 100
-    Write-Host "Оптимизация завершена успешно!" -ForegroundColor Green
+    Show-Progress -Activity "Optimization" -PercentComplete 100
+    Write-Host "Optimization completed successfully!" -ForegroundColor Green
 }
 
 # Функция для отключения ненужных служб
 function Disable-Services {
-    Write-Host "Отключение неиспользуемых служб..." -ForegroundColor Cyan
+    Write-Host "Disabling unused services..." -ForegroundColor Cyan
     
     $services = @(
         "DiagTrack",          # Телеметрия
@@ -517,37 +648,37 @@ function Disable-Services {
             if ($serviceObj -and $serviceObj.Status -eq "Running") {
                 Stop-Service -Name $service -Force -ErrorAction SilentlyContinue
                 Set-Service -Name $service -StartupType Disabled -ErrorAction SilentlyContinue
-                Write-Host "Служба $service успешно отключена" -ForegroundColor Green
+                Write-Host "Service $service successfully disabled" -ForegroundColor Green
             }
         }
         catch {
-            Write-Warning "Не удалось отключить службу ${service}: ${_}"
+            Write-Warning "Failed to disable service ${service}: ${_}"
         }
     }
 }
 
 # Функция для очистки системы
 function Clean-System {
-    Write-Host "Очистка системы..." -ForegroundColor Cyan
+    Write-Host "Cleaning system..." -ForegroundColor Cyan
     
     try {
         # Очистка временных файлов
         if (Test-Path "$env:TEMP") {
             Remove-Item -Path "$env:TEMP\\*" -Force -Recurse -ErrorAction SilentlyContinue
-            Write-Host "Очищена папка временных файлов пользователя" -ForegroundColor Green
+            Write-Host "User temporary files folder cleaned" -ForegroundColor Green
         }
         
         if (Test-Path "C:\\Windows\\Temp") {
             Remove-Item -Path "C:\\Windows\\Temp\\*" -Force -Recurse -ErrorAction SilentlyContinue
-            Write-Host "Очищена системная папка временных файлов" -ForegroundColor Green
+            Write-Host "System temporary files folder cleaned" -ForegroundColor Green
         }
         
         # Очистка корзины
         try {
             Clear-RecycleBin -Force -ErrorAction SilentlyContinue
-            Write-Host "Корзина очищена" -ForegroundColor Green
+            Write-Host "Recycle Bin emptied" -ForegroundColor Green
         } catch {
-            Write-Warning "Не удалось очистить корзину: ${_}"
+            Write-Warning "Failed to empty Recycle Bin: ${_}"
         }
         
         # Очистка кэша обновлений Windows
@@ -556,22 +687,22 @@ function Clean-System {
                 Stop-Service -Name wuauserv -Force -ErrorAction SilentlyContinue
                 Remove-Item -Path "C:\\Windows\\SoftwareDistribution\\Download\\*" -Force -Recurse -ErrorAction SilentlyContinue
                 Start-Service -Name wuauserv -ErrorAction SilentlyContinue
-                Write-Host "Очищен кэш обновлений Windows" -ForegroundColor Green
+                Write-Host "Windows Update cache cleaned" -ForegroundColor Green
             } catch {
-                Write-Warning "Не удалось очистить кэш обновлений: ${_}"
+                Write-Warning "Failed to clean Windows Update cache: ${_}"
             }
         }
         
-        Write-Host "Очистка системы выполнена успешно" -ForegroundColor Green
+        Write-Host "System cleaning completed successfully" -ForegroundColor Green
     }
     catch {
-        Write-Warning "Ошибка при очистке системы: ${_}"
+        Write-Warning "Error during system cleaning: ${_}"
     }
 }
 
 # Функция для оптимизации производительности
 function Optimize-Performance {
-    Write-Host "Оптимизация производительности..." -ForegroundColor Cyan
+    Write-Host "Optimizing performance..." -ForegroundColor Cyan
     
     try {
         # Отключение визуальных эффектов
@@ -584,9 +715,9 @@ function Optimize-Performance {
             
             # Устанавливаем производительность вместо внешнего вида
             Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -Name "VisualFXSetting" -Type DWord -Value 2 -ErrorAction SilentlyContinue
-            Write-Host "Визуальные эффекты настроены на производительность" -ForegroundColor Green
+            Write-Host "Visual effects set to performance mode" -ForegroundColor Green
         } catch {
-            Write-Warning "Не удалось настроить визуальные эффекты: ${_}"
+            Write-Warning "Failed to configure visual effects: ${_}"
         }
         
         # Отключение автозапуска программ
@@ -602,14 +733,14 @@ function Optimize-Performance {
                 $startupItems = Get-ItemProperty -Path $startupPath
                 foreach ($item in $startupItems.PSObject.Properties) {
                     if ($item.Name -notlike "PS*") {
-                        Write-Host "Отключение автозапуска: $($item.Name)" -ForegroundColor Yellow
+                        Write-Host "Disabling autostart: $($item.Name)" -ForegroundColor Yellow
                         Remove-ItemProperty -Path $startupPath -Name $item.Name -ErrorAction SilentlyContinue
                     }
                 }
-                Write-Host "Обработка автозагрузки завершена" -ForegroundColor Green
+                Write-Host "Startup items processing completed" -ForegroundColor Green
             }
         } catch {
-            Write-Warning "Не удалось обработать элементы автозапуска: ${_}"
+            Write-Warning "Failed to process startup items: ${_}"
         }
         
         # Настройка плана электропитания на высокую производительность
@@ -620,17 +751,17 @@ function Optimize-Performance {
                 if ($highPerfScheme -match "([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})") {
                     $schemeGuid = $Matches[1]
                     powercfg /setactive $schemeGuid
-                    Write-Host "Установлен план электропитания высокой производительности" -ForegroundColor Green
+                    Write-Host "High performance power plan activated" -ForegroundColor Green
                 }
             }
         } catch {
-            Write-Warning "Не удалось настроить план электропитания: ${_}"
+            Write-Warning "Failed to configure power plan: ${_}"
         }
         
-        Write-Host "Оптимизация производительности выполнена успешно" -ForegroundColor Green
+        Write-Host "Performance optimization completed successfully" -ForegroundColor Green
     }
     catch {
-        Write-Warning "Ошибка при оптимизации производительности: ${_}"
+        Write-Warning "Error during performance optimization: ${_}"
     }
 }
 
@@ -639,32 +770,32 @@ Optimize-Windows
 
 # Остановка логирования
 Stop-Transcript
-Write-Host "Оптимизация завершена. Лог сохранен в файл: $LogPath" -ForegroundColor Green
+Write-Host "Optimization completed. Log saved to file: $LogPath" -ForegroundColor Green
 pause
 """
         
         # Batch скрипт для запуска PowerShell
         template_files["Start-Optimizer.bat"] = """@echo off
 chcp 65001 >nul
-title Запуск оптимизации Windows
+title Windows Optimization
 
-:: Проверка прав администратора
+:: Check administrator rights
 net session >nul 2>&1
 if %errorlevel% neq 0 (
-    echo Скрипт требует запуска от имени администратора.
-    echo Пожалуйста, запустите этот файл от имени администратора.
+    echo This script requires administrator privileges.
+    echo Please run this file as administrator.
     pause
     exit /b 1
 )
 
-echo Запуск скрипта оптимизации Windows...
+echo Starting Windows optimization script...
 echo ==========================================
 
-:: Запуск PowerShell скрипта с обходом политики выполнения и правильной кодировкой
+:: Run PowerShell script with execution policy bypass
 powershell -ExecutionPolicy Bypass -NoProfile -File "WindowsOptimizer.ps1"
 
 echo ==========================================
-echo Скрипт оптимизации выполнен.
+echo Optimization script completed.
 pause
 """
         
@@ -684,9 +815,23 @@ pause
 - PowerShell 5.1 или выше
 
 ## Использование
-1. Запустите файл `Start-Optimizer.bat` от имени администратора
-2. Дождитесь завершения работы скрипта
-3. Перезагрузите компьютер для применения всех изменений
+Есть два способа запуска скриптов:
+
+### Способ 1: Через PowerShell (рекомендуется)
+1. Щелкните правой кнопкой мыши на файле `Run-Optimizer.ps1`
+2. Выберите "Запустить с помощью PowerShell" или "Запустить от имени администратора"
+3. Дождитесь завершения работы скрипта
+4. Перезагрузите компьютер для применения всех изменений
+
+### Способ 2: Через командную строку
+1. Запустите командную строку от имени администратора
+2. Перейдите в папку со скриптами командой `cd путь\к\папке\со\скриптами`
+3. Выполните команду `Start-Optimizer.bat`
+4. Дождитесь завершения работы скрипта
+5. Перезагрузите компьютер для применения всех изменений
+
+### Примечание по решению проблем с кодировкой
+Если при запуске `Start-Optimizer.bat` возникают ошибки с кодировкой (текст отображается некорректно), используйте файл `Run-Optimizer.ps1` для запуска скрипта из PowerShell.
 
 ## Предупреждения
 - Перед запуском скрипта рекомендуется создать точку восстановления системы
@@ -695,6 +840,46 @@ pause
 
 ## Поддержка
 При возникновении проблем обращайтесь за помощью через Telegram бота.
+"""
+        
+        # PowerShell файл для запуска основного скрипта (альтернатива .bat файлу)
+        template_files["Run-Optimizer.ps1"] = """# Encoding: UTF-8
+# PowerShell script to run the optimization script with proper rights
+$OutputEncoding = [System.Text.Encoding]::UTF8
+
+# Check administrator rights
+function Test-Administrator {
+    $user = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($user)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+if (-not (Test-Administrator)) {
+    Write-Warning "This script requires administrator privileges."
+    Write-Warning "Please run this file as administrator."
+    pause
+    exit
+}
+
+Write-Host "Starting Windows optimization script..." -ForegroundColor Green
+Write-Host "==========================================" -ForegroundColor Cyan
+
+# Check if the main script exists
+if (Test-Path -Path "WindowsOptimizer.ps1") {
+    # Run the main PowerShell script
+    try {
+        & .\WindowsOptimizer.ps1
+    } catch {
+        Write-Host "Error running the optimization script: $_" -ForegroundColor Red
+    }
+} else {
+    Write-Host "Error: WindowsOptimizer.ps1 not found in the current directory." -ForegroundColor Red
+    Write-Host "Make sure all files are extracted from the ZIP archive." -ForegroundColor Yellow
+}
+
+Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "Optimization script completed." -ForegroundColor Green
+pause
 """
         
         # Подсчет и возврат найденных файлов
@@ -719,13 +904,25 @@ pause
                 instructions = """# Инструкция по использованию скриптов оптимизации
 
 1. Распакуйте все файлы из архива в отдельную папку на вашем компьютере.
-2. Для запуска оптимизации просто запустите файл Start-Optimizer.bat от имени администратора.
-3. Следуйте инструкциям, которые появятся в консоли.
+
+СПОСОБ 1 (РЕКОМЕНДУЕТСЯ): Запуск через PowerShell
+- Щелкните правой кнопкой мыши на файле Run-Optimizer.ps1
+- Выберите "Запустить с помощью PowerShell" или "Запустить от имени администратора"
+- Следуйте инструкциям на экране
+
+СПОСОБ 2: Запуск через командную строку
+- Запустите командную строку от имени администратора
+- Перейдите в папку со скриптами командой: cd путь\к\папке\со\скриптами
+- Выполните команду: Start-Optimizer.bat
+
+ЕСЛИ ВОЗНИКАЮТ ОШИБКИ КОДИРОВКИ:
+Если при запуске Start-Optimizer.bat видны ошибки с символами "", используйте 
+метод запуска через PowerShell скрипт Run-Optimizer.ps1 (Способ 1).
 
 ## Важно:
 - Перед запуском создайте точку восстановления системы.
 - Скрипты создают резервные копии измененных параметров в папке WindowsOptimizer_Backups.
-- Все действия скриптов записываются в лог-файл в папке WindowsOptimizer_Logs.
+- Все действия скриптов записываются в лог-файл в папке Temp.
 
 Если у вас возникнут проблемы, используйте команду /help для получения справки."""
                 
