@@ -5,11 +5,11 @@ from datetime import datetime
 from collections import defaultdict, Counter
 import logging
 
-# Настраиваем логирование
-logging.basicConfig(level=logging.INFO, 
-                   format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                   filename='windows_optimizer_bot.log')
-
+# Настройка логирования
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 logger = logging.getLogger(__name__)
 
 class ScriptMetrics:
@@ -54,17 +54,47 @@ class ScriptMetrics:
         with open(self.metrics_file, 'w', encoding='utf-8') as f:
             json.dump(self.metrics, f, indent=4, ensure_ascii=False)
     
-    def record_script_generation(self, model_name, validation_results, fix_results=None):
-        """Запись метрик о сгенерированном скрипте
+    def record_script_generation(self, data=None):
+        """Записывает информацию о генерации скрипта
         
         Args:
-            model_name (str): Название модели, которая сгенерировала скрипт
-            validation_results (dict): Результаты валидации скрипта
-            fix_results (dict, optional): Результаты исправления ошибок
+            data (dict, optional): Данные о генерации. Если None, то просто увеличивает счетчик.
         """
-        # Увеличиваем счетчик сгенерированных скриптов
-        self.metrics["total_scripts_generated"] += 1
+        try:
+            # Увеличиваем счетчик сгенерированных скриптов
+            self.metrics["total_scripts_generated"] += 1
+            
+            # Если переданы данные для записи
+            if isinstance(data, dict):
+                # Проверяем наличие поля errors или validation_results
+                if "errors" in data or "validation_results" in data:
+                    # Сохраняем данные об ошибках, если они есть
+                    validation_results = data.get("validation_results") or data.get("errors") or {}
+                    
+                    # Записываем результаты валидации
+                    self.record_validation_results(validation_results)
+                    
+                    # Если переданы данные о количестве исправленных ошибок
+                    if "fixed_count" in data:
+                        self.metrics["total_errors_fixed"] += data["fixed_count"]
+                        self.record_script_fix()
+            
+            # Сохраняем изменения
+            self._save_metrics()
+            
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка при записи информации о генерации скрипта: {e}")
+            return False
+    
+    def record_validation_results(self, validation_results, model_name="unknown", fixed_count=0):
+        """Запись результатов валидации скрипта
         
+        Args:
+            validation_results (dict): Результаты валидации скриптов
+            model_name (str, optional): Название модели
+            fixed_count (int, optional): Количество исправленных ошибок
+        """
         # Подсчет ошибок
         error_count = 0
         error_types = Counter()
@@ -90,13 +120,6 @@ class ScriptMetrics:
                 self.metrics["error_types"][error_type] += count
             else:
                 self.metrics["error_types"][error_type] = count
-        
-        # Записываем фиксы ошибок, если они были
-        fixed_count = 0
-        if fix_results:
-            # Считаем разницу между ошибками до и после исправления
-            fixed_count = error_count - sum(len(issues) for issues in fix_results.values())
-            self.metrics["total_errors_fixed"] += fixed_count
         
         # Добавляем запись в тренды
         trend_entry = {
@@ -182,27 +205,24 @@ class ScriptMetrics:
         return dict(daily_trends)
     
     def get_common_errors(self, limit=5):
-        """
-        Возвращает самые распространенные типы ошибок
+        """Получение наиболее распространенных типов ошибок
         
-        :param limit: максимальное количество типов ошибок для возврата
-        :return: список кортежей (тип_ошибки, количество)
+        Args:
+            limit (int): Ограничение по количеству возвращаемых ошибок
+        
+        Returns:
+            list: Список кортежей (тип_ошибки, количество)
         """
         try:
-            # Собираем все типы ошибок из метрик
-            error_types = []
+            # Берем словарь с типами ошибок
+            error_types = self.metrics.get("error_types", {})
             
-            if 'errors' in self.metrics and isinstance(self.metrics['errors'], dict):
-                for script_type, errors in self.metrics['errors'].items():
-                    error_types.extend(errors.keys())
+            # Создаем счетчик
+            counter = Counter(error_types)
             
-            # Считаем частоту каждого типа ошибки
-            error_counter = Counter(error_types)
-            
-            # Возвращаем самые распространенные ошибки
-            return error_counter.most_common(limit)
+            # Возвращаем наиболее распространенные ошибки
+            return counter.most_common(limit)
         except Exception as e:
-            # Логируем ошибку и возвращаем пустой список
             logger.error(f"Ошибка при получении распространенных ошибок: {e}")
             return []
     

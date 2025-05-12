@@ -2,7 +2,7 @@ import os
 import logging
 import json
 import base64
-import subprocess
+import re
 from io import BytesIO
 from datetime import datetime
 import zipfile
@@ -14,73 +14,13 @@ import telebot
 from telebot import types
 from telebot.async_telebot import AsyncTeleBot
 
-# Создаем заглушки для удаленных модулей
-class ScriptValidator:
-    """Заглушка для класса валидатора скриптов"""
-    
-    def __init__(self):
-        self.required_code_blocks = {
-            "ps1": {
-                "error_handling": r"try|catch",
-                "admin_check": r"if\s*\(\s*\-not\s*\(\s*\[bool\]\s*\(\s*\[System\.Security\.Principal\.WindowsIdentity\]::GetCurrent\(\)\.Groups\s*\-match\s*['\"]S-1-5-32-544['\"]\s*\)\s*\)\s*\)"
-            },
-            "bat": {
-                "admin_check": r"NET FILE"
-            }
-        }
-    
-    def validate_scripts(self, files):
-        """Заглушка для валидации скриптов"""
-        logger.info("Используется заглушка для валидации скриптов")
-        return {name: [] for name in files}
-    
-    def repair_common_issues(self, files):
-        """Заглушка для исправления распространенных проблем"""
-        logger.info("Используется заглушка для исправления проблем в скриптах")
-        return files
-    
-    def enhance_scripts(self, files):
-        """Заглушка для улучшения скриптов"""
-        logger.info("Используется заглушка для улучшения скриптов")
-        return files
+# Импортируем наши модули
+from script_validator import ScriptValidator
+from script_metrics import ScriptMetrics
+from prompt_optimizer import PromptOptimizer
 
-class ScriptMetrics:
-    """Заглушка для класса метрик скриптов"""
-    
-    def __init__(self):
-        pass
-    
-    def record_script_generation(self, data):
-        """Заглушка для записи метрик генерации скриптов"""
-        logger.info(f"Запись метрик скрипта (заглушка): {data['timestamp']}")
-        return True
-    
-    def get_summary(self):
-        """Заглушка для получения сводки по метрикам"""
-        return {"total_scripts": 0, "total_errors": 0}
-    
-    def get_common_errors(self, limit=10):
-        """Заглушка для получения распространенных ошибок"""
-        return []
-
-class PromptOptimizer:
-    """Заглушка для оптимизатора промптов"""
-    
-    def __init__(self, base_prompts_file="base_prompts.json"):
-        pass
-    
-    def get_optimized_prompts(self):
-        """Заглушка для получения оптимизированных промптов"""
-        return {
-            "OPTIMIZATION_PROMPT_TEMPLATE": OPTIMIZATION_PROMPT_TEMPLATE,
-            "ERROR_FIX_PROMPT_TEMPLATE": ERROR_FIX_PROMPT_TEMPLATE,
-            "version": 1
-        }
-    
-    def update_prompts_based_on_metrics(self):
-        """Заглушка для обновления промптов на основе метрик"""
-        logger.info("Обновление промптов (заглушка)")
-        return False
+# Импортируем модуль для валидации скриптов
+from validate_and_fix_scripts import validate_and_fix_scripts
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -116,113 +56,243 @@ error_stats = {
     "other": 0
 }
 
-# Шаблон промпта для оптимизации системы
-OPTIMIZATION_PROMPT_TEMPLATE = r"""
-Ты - эксперт по системному администрированию Windows и PowerShell. Необходимо создать скрипты для оптимизации Windows на основе предоставленного изображения.
+# Шаблон промпта для генерации скрипта оптимизации
+OPTIMIZATION_PROMPT_TEMPLATE = """Ты эксперт по оптимизации Windows. Тебе предоставлен скриншот системной информации. Твоя задача - создать скрипты для оптимизации этой системы.
 
-ТРЕБОВАНИЯ К СКРИПТАМ:
-1. Создай два файла: основной PowerShell скрипт (WindowsOptimizer.ps1) и вспомогательный BAT-файл для запуска (Start-Optimizer.bat).
-2. В BAT-файле должен быть запуск PowerShell скрипта с параметром -ExecutionPolicy Bypass и проверка прав администратора.
-3. PowerShell скрипт должен включать:
-   - Функции резервного копирования параметров перед изменением (обязательно!)
-   - Проверку наличия прав администратора
-   - Оптимизацию производительности на основе данных из изображения
-   - Отключение ненужных служб и компонентов
-   - Очистку временных файлов и оптимизацию диска
-   - Проверки наличия файлов перед их модификацией
-   - Логирование всех действий с указанием времени
-   - Обработку ошибок (все операции должны быть в try-catch блоках)
-   - Подробные комментарии о выполняемых действиях
+Обязательно следуй этим требованиям к скриптам:
 
-СТРУКТУРА POWERSHELL СКРИПТА:
-- В начале скрипта должна быть функция резервного копирования (Backup-Settings)
-- Затем проверка прав администратора с выходом, если прав недостаточно
-- Функции для выполнения оптимизации (отдельно для каждой категории)
-- Основная часть скрипта, вызывающая функции оптимизации
-- Вывод информации о выполненных оптимизациях в конце
+1. PowerShell скрипт (.ps1):
+   - Всегда начинай с установки кодировки UTF-8: `$OutputEncoding = [System.Text.Encoding]::UTF8`
+   - Проверяй права администратора в самом начале скрипта
+   - Все блоки try ДОЛЖНЫ иметь соответствующие блоки catch
+   - Используй правильное форматирование переменных: внутри строк с двоеточием используй `${variable}` вместо `$variable`
+   - Проверяй существование файлов с помощью Test-Path перед их использованием
+   - Добавляй ключ -Force для команд Remove-Item
+   - Обеспечь балансировку всех фигурных скобок
+   - Для вывода сообщений об ошибках используй формат: `"Сообщение: ${variable}"`
 
-ВАЖНЫЕ ПРАВИЛА:
-- ВСЕГДА проверяй существование файлов и служб перед их изменением (Test-Path, Get-Service)
-- Используй параметр -Force для операций с файлами
-- Добавляй параметр -ErrorAction SilentlyContinue для критичных операций
-- Обеспечь полную совместимость с Windows 10/11
-- Не используй опасные операции, которые могут сломать систему (не отключай критичные службы)
-- Создавай резервные копии всех изменяемых параметров
-- Документируй код подробными комментариями
+2. Batch файл (.bat):
+   - Обязательно начинай с `@echo off` и `chcp 65001 >nul`
+   - Проверяй права администратора
+   - Добавляй корректные параметры при вызове PowerShell: `-ExecutionPolicy Bypass -NoProfile -File`
+   - Используй перенаправление ошибок `>nul 2>&1` для команд
 
-Проанализируй изображение и создай скрипты оптимизации, которые учитывают информацию о системе из скриншота. Если на изображении системные характеристики или состояние компьютера, используй эту информацию для создания более эффективной оптимизации.
+3. ReadMe файл (README.md):
+   - Подробная документация по использованию скриптов
+   - Описание выполняемых оптимизаций
+   - Требования и предупреждения
 
 Предоставь три файла:
-1. WindowsOptimizer.ps1 (основной PowerShell скрипт оптимизации)
-2. Start-Optimizer.bat (вспомогательный BAT-файл для запуска)
-3. README.md (краткое описание и инструкции)
+1. WindowsOptimizer.ps1 - скрипт оптимизации PowerShell, который анализирует систему и оптимизирует её
+2. Start-Optimizer.bat - bat-файл для запуска PowerShell скрипта с нужными параметрами
+3. README.md - инструкция по использованию скриптов
+
+Используй шаблоны и структуры, указанные ниже:
+
+Для PowerShell скрипта:
+```powershell
+# Encoding: UTF-8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+
+# Проверка прав администратора
+function Test-Administrator {
+    $user = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($user)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+if (-not (Test-Administrator)) {
+    Write-Warning "Этот скрипт требует запуска от имени администратора."
+    Write-Warning "Пожалуйста, запустите скрипт от имени администратора."
+    pause
+    exit
+}
+
+# Настройка логирования
+$LogPath = "$env:TEMP\WindowsOptimizer_Log.txt"
+Start-Transcript -Path $LogPath -Append -Force
+Write-Host "Логирование настроено. Лог будет сохранен в файл: $LogPath" -ForegroundColor Green
+
+# Функция для создания резервных копий настроек
+function Backup-Settings {
+    param (
+        [string]$SettingName,
+        [string]$Data
+    )
+    
+    try {
+        # Создаем директорию для резервных копий, если ее нет
+        $BackupDir = "$env:USERPROFILE\WindowsOptimizer_Backups"
+        if (-not (Test-Path -Path $BackupDir)) {
+            New-Item -Path $BackupDir -ItemType Directory -Force | Out-Null
+        }
+        
+        # Формируем имя файла резервной копии
+        $Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+        $BackupFile = "$BackupDir\${SettingName}_$Timestamp.bak"
+        
+        # Сохраняем данные в файл
+        $Data | Out-File -FilePath $BackupFile -Encoding UTF8 -Force
+        
+        Write-Host "Создана резервная копия $SettingName в файле $BackupFile" -ForegroundColor Green
+        return $BackupFile
+    }
+    catch {
+        Write-Warning "Не удалось создать резервную копию ${SettingName}: ${_}"
+        return $null
+    }
+}
+
+# Функция отображения прогресса
+function Show-Progress {
+    param (
+        [string]$Activity,
+        [int]$PercentComplete
+    )
+    
+    Write-Progress -Activity $Activity -PercentComplete $PercentComplete
+    Write-Host "[$($Activity)]: $PercentComplete%" -ForegroundColor Cyan
+}
+
+# Дальше идет твой код оптимизации...
+```
+
+Для BAT файла:
+```batch
+@echo off
+chcp 65001 >nul
+title Запуск оптимизации Windows
+
+:: Проверка прав администратора
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo Скрипт требует запуска от имени администратора.
+    echo Пожалуйста, запустите этот файл от имени администратора.
+    pause
+    exit /b 1
+)
+
+echo Запуск скрипта оптимизации Windows...
+echo ==========================================
+
+:: Запуск PowerShell скрипта с обходом политики выполнения и правильной кодировкой
+powershell -ExecutionPolicy Bypass -NoProfile -File "WindowsOptimizer.ps1"
+
+echo ==========================================
+echo Скрипт оптимизации выполнен.
+pause
+```
+
+ВАЖНЫЕ ИНСТРУКЦИИ:
+- Обязательно проверяйте права администратора в начале скрипта
+- Добавляйте обработку ошибок для каждой важной операции
+- Используйте формат ${переменная} в строках с двоеточием
+- Для PowerShell скриптов используйте кодировку UTF-8
+- Убедитесь, что все блоки try имеют соответствующие блоки catch
+- Всегда балансируйте фигурные скобки во всех скриптах
+
+Анализируй предоставленный скриншот и создай оптимизированные скрипты для данной системы.
 """
 
-# Шаблон промпта для исправления ошибок
-ERROR_FIX_PROMPT_TEMPLATE = r"""
-Ты - эксперт по PowerShell и Windows. Необходимо исправить ошибки в скрипте оптимизации Windows, которые видны на прикрепленном изображении.
+# Шаблон промпта для исправления ошибок в скрипте
+ERROR_FIX_PROMPT_TEMPLATE = """Ты эксперт по PowerShell и Batch скриптам. Перед тобой скриншот с ошибками выполнения скрипта оптимизации Windows. Твоя задача - проанализировать ошибки и исправить код скрипта.
 
-ЗАДАЧА:
-1. Проанализируй ошибки на скриншоте
-2. Определи, что именно вызывает проблемы
-3. Создай исправленные версии скриптов
+Вот основные типы ошибок, которые могут встречаться:
 
-ТИПИЧНЫЕ ПРОБЛЕМЫ, КОТОРЫЕ МОГУТ БЫТЬ НА СКРИНШОТЕ:
-1. Синтаксические ошибки в PowerShell или BAT
-2. Проблемы с правами доступа
-3. Несбалансированные скобки или кавычки
-4. Отсутствующие зависимости или компоненты
-5. Ошибки при доступе к файлам или реестру
-6. Проблемы с кодировкой
-7. Несуществующие команды или параметры
+1. Синтаксические ошибки:
+   - Несбалансированные скобки
+   - Неверное использование переменных
+   - Ошибки в конструкциях try-catch
+   - Неэкранированные специальные символы
 
-ТРЕБОВАНИЯ К ИСПРАВЛЕННЫМ СКРИПТАМ:
-- Добавь дополнительные проверки для предотвращения подобных ошибок в будущем
-- Улучши обработку ошибок (try-catch блоки)
-- Добавь логирование для отладки
-- Для операций с файлами всегда добавляй проверку существования (Test-Path)
-- Все изменения должны сохраняться в резервные копии
-- Операции удаления должны использовать параметр -Force
-- Для PowerShell добавь проверку прав администратора
-- Для Batch файлов добавь корректный запуск с параметром -ExecutionPolicy Bypass
+2. Проблемы с доступом:
+   - Отсутствие проверки прав администратора
+   - Попытка доступа к несуществующим файлам или службам
+   - Отсутствие параметра -Force для Remove-Item
 
-СТРУКТУРА СКРИПТОВ:
-1. WindowsOptimizer.ps1 - основной скрипт оптимизации
-2. Start-Optimizer.bat - вспомогательный скрипт запуска с правами администратора
+3. Проблемы кодировки:
+   - Отсутствие установки правильной кодировки
+   - Неверное отображение кириллических символов
 
-При анализе изображения и исправлении ошибок обрати особое внимание на контекст выполнения, сообщения об ошибках и синтаксические проблемы, которые можно увидеть на скриншоте.
+Важные правила при исправлении:
 
-Предоставь исправленные версии файлов:
-1. WindowsOptimizer.ps1 (исправленный PowerShell скрипт)
-2. Start-Optimizer.bat (исправленный BAT-файл для запуска)
+1. Для PowerShell:
+   - Всегда добавляй в начало скрипта: `$OutputEncoding = [System.Text.Encoding]::UTF8`
+   - Все блоки try ДОЛЖНЫ иметь соответствующие блоки catch
+   - Переменные в строках с двоеточием используй в формате `${variable}` вместо `$variable`
+   - Используй проверки Test-Path перед операциями с файлами
+   - Балансируй все фигурные скобки
+
+2. Для Batch:
+   - Начинай с `@echo off` и `chcp 65001 >nul`
+   - Добавляй корректные параметры при вызове PowerShell
+
+Предоставь исправленные версии файлов с учетом обнаруженных на скриншоте проблем.
+
+ОБЯЗАТЕЛЬНО ПРОВЕРЬТЕ:
+- Проверку прав администратора
+- Наличие и корректность блоков обработки ошибок
+- Кодировку UTF-8 для PowerShell скриптов
+- Балансировку всех скобок в скрипте
+- Правильный формат переменных в строках с двоеточием (${variable})
 """
 
-import re
+def validate_and_fix_scripts(files):
+    """
+    Валидирует и исправляет скрипты
+    
+    Args:
+        files: словарь с файлами (имя файла -> содержимое)
+    
+    Returns:
+        tuple: (исправленные файлы, результаты валидации, кол-во исправленных ошибок)
+    """
+    validator = ScriptValidator()
+    
+    # Валидируем скрипты
+    validation_results = validator.validate_scripts(files)
+    
+    # Подсчитываем общее количество ошибок
+    total_errors = sum(len(errors) for errors in validation_results.values())
+    logger.info(f"Найдено {total_errors} проблем в скриптах")
+    
+    # Исправляем распространенные проблемы
+    fixed_files = validator.repair_common_issues(files)
+    
+    # Валидируем исправленные скрипты
+    fixed_validation_results = validator.validate_scripts(fixed_files)
+    
+    # Подсчитываем количество исправленных ошибок
+    fixed_errors = sum(len(errors) for errors in fixed_validation_results.values())
+    errors_corrected = total_errors - fixed_errors
+    
+    # Улучшаем скрипты, добавляя полезные функции
+    enhanced_files = validator.enhance_scripts(fixed_files)
+    
+    logger.info(f"Исправлено {errors_corrected} проблем, осталось {fixed_errors} проблем")
+    
+    return enhanced_files, fixed_validation_results, errors_corrected
 
 class OptimizationBot:
-    """Класс для управления ботом оптимизации Windows"""
+    """Класс для оптимизации Windows с помощью AI"""
     
     def __init__(self, api_key, validator=None):
-        """Инициализация бота с заданными токенами"""
+        """
+        Инициализирует бота
+        
+        Args:
+            api_key: API ключ для Anthropic Claude
+            validator: экземпляр ScriptValidator (если None, будет создан новый)
+        """
         self.api_key = api_key
-        self.client = anthropic.Anthropic(api_key=api_key)
         self.validator = validator or ScriptValidator()
         self.metrics = ScriptMetrics()
-        self.prompt_optimizer = PromptOptimizer()
-        
-        # Метрики качества
-        self.total_scripts_generated = 0
-        self.total_errors = 0
-        self.error_types = {}
-        
-        # Получение оптимизированных промптов
-        prompts = self.prompt_optimizer.get_optimized_prompts()
-        self.optimization_prompt = prompts.get("OPTIMIZATION_PROMPT_TEMPLATE", OPTIMIZATION_PROMPT_TEMPLATE)
-        self.error_fix_prompt = prompts.get("ERROR_FIX_PROMPT_TEMPLATE", ERROR_FIX_PROMPT_TEMPLATE)
+        self.prompt_optimizer = PromptOptimizer(metrics=self.metrics)
+        self.client = anthropic.Anthropic(api_key=api_key)
+        self.prompts = self.prompt_optimizer.get_optimized_prompts()
     
     async def generate_new_script(self, message):
         """Генерация нового скрипта оптимизации на основе скриншота системы"""
-        global script_gen_count
         
         try:
             logger.info(f"Начинаю генерацию скрипта для пользователя {message.chat.id}")
@@ -246,7 +316,7 @@ class OptimizationBot:
             user_message = user_messages.get(message.chat.id, "Создай скрипт оптимизации Windows")
             
             # Используем оптимизированный промпт, если он доступен
-            prompt = self.optimization_prompt
+            prompt = self.prompts.get("OPTIMIZATION_PROMPT_TEMPLATE", OPTIMIZATION_PROMPT_TEMPLATE)
             
             messages = [
                 {
@@ -260,18 +330,52 @@ class OptimizationBot:
             
             logger.info("Отправляю запрос к Claude API...")
             
-            # Отправляем запрос к Claude
-            response = await asyncio.to_thread(
-                self.client.messages.create,
-                model="claude-3-opus-20240229",
-                max_tokens=4000,
-                messages=messages
-            )
-            
-            # Обрабатываем ответ
-            response_text = response.content[0].text
-            
-            logger.info(f"Получен ответ от Claude API, длина: {len(response_text)} символов")
+            try:
+                # Отправляем запрос к Claude
+                response = await asyncio.to_thread(
+                    self.client.messages.create,
+                    model="claude-3-opus-20240229",
+                    max_tokens=4000,
+                    messages=messages
+                )
+                
+                # Обрабатываем ответ
+                response_text = response.content[0].text
+                
+                logger.info(f"Получен ответ от Claude API, длина: {len(response_text)} символов")
+            except Exception as api_error:
+                # Проверяем ошибку баланса API
+                error_str = str(api_error)
+                if "credit balance is too low" in error_str or "Your credit balance is too low" in error_str:
+                    logger.error(f"Ошибка недостаточного баланса API: {api_error}")
+                    error_message = "К сожалению, баланс API-кредитов исчерпан. Пожалуйста, обратитесь к администратору для пополнения баланса."
+                    error_message += "\n\nПока что будет использован резервный подход с шаблонными скриптами."
+                    await bot.send_message(message.chat.id, error_message)
+                    
+                    # Используем альтернативный подход с шаблонами
+                    files = self._get_template_scripts()
+                    
+                    # Проверяем и улучшаем шаблонные скрипты
+                    fixed_files, validation_results, errors_corrected = validate_and_fix_scripts(files)
+                    
+                    # Обновляем статистику
+                    self.metrics.record_script_generation({
+                        "timestamp": datetime.now().isoformat(),
+                        "errors": validation_results,
+                        "error_count": sum(len(issues) for issues in validation_results.values()),
+                        "fixed_count": errors_corrected,
+                        "model": "template_fallback",
+                        "api_error": True
+                    })
+                    
+                    # Сохраняем файлы для последующей отправки
+                    user_files[message.chat.id] = fixed_files
+                    
+                    return fixed_files
+                else:
+                    # Другая ошибка API - просто пробрасываем исключение
+                    logger.error(f"Ошибка API: {api_error}")
+                    raise api_error
             
             # Извлекаем файлы из ответа
             files = self.extract_files(response_text)
@@ -280,111 +384,322 @@ class OptimizationBot:
                 logger.warning("Не удалось извлечь файлы из ответа API")
                 return "Не удалось создать скрипты оптимизации. Пожалуйста, попробуйте еще раз или отправьте другое изображение."
             
-            # Валидация и улучшение скриптов
-            validation_results = self.validator.validate_scripts(files)
-            
-            # Подсчитываем количество ошибок
-            error_count = 0
-            for filename, issues in validation_results.items():
-                error_count += len(issues)
-            
-            # Обновляем статистику ошибок
-            self.update_error_stats(validation_results)
-            
-            # Исправляем распространенные ошибки
-            if error_count > 0:
-                logger.info(f"Найдено {error_count} ошибок, применяю автоматические исправления")
-                files = self.validator.repair_common_issues(files)
-                
-                # Повторная валидация после исправлений
-                validation_results = self.validator.validate_scripts(files)
-                
-                # Снова считаем ошибки
-                fixed_error_count = 0
-                for filename, issues in validation_results.items():
-                    fixed_error_count += len(issues)
-                
-                logger.info(f"После исправлений осталось {fixed_error_count} ошибок")
-            
-            # Улучшаем скрипты (добавляем документацию, логирование и т.д.)
-            files = self.validator.enhance_scripts(files)
-            
-            # Обновляем счетчик сгенерированных скриптов
-            script_gen_count += 1
-            self.total_scripts_generated += 1
+            # Дополнительная проверка и исправление скриптов
+            fixed_files, validation_results, errors_corrected = validate_and_fix_scripts(files)
             
             # Обновляем статистику
             self.metrics.record_script_generation({
                 "timestamp": datetime.now().isoformat(),
                 "errors": validation_results,
-                "error_count": error_count,
-                "fixed_count": error_count - fixed_error_count if 'fixed_error_count' in locals() else 0,
+                "error_count": sum(len(issues) for issues in validation_results.values()),
+                "fixed_count": errors_corrected,
                 "model": "claude-3-opus-20240229"
             })
             
             # Сохраняем файлы для последующей отправки
-            user_files[message.chat.id] = files
+            user_files[message.chat.id] = fixed_files
             
-            return files
+            return fixed_files
         
         except Exception as e:
-            logger.error(f"Ошибка при генерации скрипта: {e}", exc_info=True)
-            return f"Произошла ошибка при создании скрипта: {str(e)}"
+            logger.error(f"Ошибка при генерации скрипта: {e}")
+            return f"Произошла ошибка при генерации скрипта: {str(e)}"
     
-    def extract_files(self, response_text):
-        """Извлечение файлов из ответа Claude"""
-        files = {}
+    def _get_template_scripts(self):
+        """Получение шаблонных скриптов в случае ошибки API
         
-        try:
-            # Ищем блоки с файлами
-            file_pattern = r"```(\w+)\s+(.+?)\s+filename:\s+(.+?)\s+([\s\S]+?)```"
-            matches = [(ext, desc, name, content) for ext, desc, name, content in re.findall(file_pattern, response_text)]
+        Returns:
+            dict: Словарь с файлами (имя файла -> содержимое)
+        """
+        logger.info("Использую шаблонные скрипты из-за ошибки API")
+        
+        # Получаем шаблонные скрипты
+        template_files = {}
+        
+        # PowerShell скрипт - базовый шаблон для оптимизации
+        template_files["WindowsOptimizer.ps1"] = """# Encoding: UTF-8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+
+# Проверка прав администратора
+function Test-Administrator {
+    $user = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($user)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+if (-not (Test-Administrator)) {
+    Write-Warning "Этот скрипт требует запуска от имени администратора."
+    Write-Warning "Пожалуйста, запустите скрипт от имени администратора."
+    pause
+    exit
+}
+
+# Настройка логирования
+$LogPath = "$env:TEMP\\WindowsOptimizer_Log.txt"
+Start-Transcript -Path $LogPath -Append -Force
+Write-Host "Логирование настроено. Лог будет сохранен в файл: $LogPath" -ForegroundColor Green
+
+# Функция для создания резервных копий настроек
+function Backup-Settings {
+    param (
+        [string]$SettingName,
+        [string]$Data
+    )
+    
+    try {
+        # Создаем директорию для резервных копий, если ее нет
+        $BackupDir = "$env:USERPROFILE\\WindowsOptimizer_Backups"
+        if (-not (Test-Path -Path $BackupDir)) {
+            New-Item -Path $BackupDir -ItemType Directory -Force | Out-Null
+        }
+        
+        # Формируем имя файла резервной копии
+        $Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+        $BackupFile = "$BackupDir\\${SettingName}_$Timestamp.bak"
+        
+        # Сохраняем данные в файл
+        $Data | Out-File -FilePath $BackupFile -Encoding UTF8 -Force
+        
+        Write-Host "Создана резервная копия $SettingName в файле $BackupFile" -ForegroundColor Green
+        return $BackupFile
+    }
+    catch {
+        Write-Warning "Не удалось создать резервную копию ${SettingName}: ${_}"
+        return $null
+    }
+}
+
+# Функция отображения прогресса
+function Show-Progress {
+    param (
+        [string]$Activity,
+        [int]$PercentComplete
+    )
+    
+    Write-Progress -Activity $Activity -PercentComplete $PercentComplete
+    Write-Host "[$Activity]: $PercentComplete%" -ForegroundColor Cyan
+}
+
+# Основная функция оптимизации
+function Optimize-Windows {
+    Write-Host "Запуск оптимизации Windows..." -ForegroundColor Green
+    
+    # Отключение ненужных служб
+    Show-Progress -Activity "Оптимизация" -PercentComplete 10
+    Disable-Services
+    
+    # Очистка диска
+    Show-Progress -Activity "Оптимизация" -PercentComplete 40
+    Clean-System
+    
+    # Оптимизация производительности
+    Show-Progress -Activity "Оптимизация" -PercentComplete 70
+    Optimize-Performance
+    
+    Show-Progress -Activity "Оптимизация" -PercentComplete 100
+    Write-Host "Оптимизация завершена успешно!" -ForegroundColor Green
+}
+
+# Функция для отключения ненужных служб
+function Disable-Services {
+    Write-Host "Отключение неиспользуемых служб..." -ForegroundColor Cyan
+    
+    $services = @(
+        "DiagTrack",          # Телеметрия
+        "dmwappushservice",   # Служба WAP Push
+        "SysMain",            # Superfetch
+        "WSearch"             # Поиск Windows
+    )
+    
+    foreach ($service in $services) {
+        try {
+            $serviceObj = Get-Service -Name $service -ErrorAction SilentlyContinue
+            if ($serviceObj -and $serviceObj.Status -eq "Running") {
+                Stop-Service -Name $service -Force -ErrorAction SilentlyContinue
+                Set-Service -Name $service -StartupType Disabled -ErrorAction SilentlyContinue
+                Write-Host "Служба $service успешно отключена" -ForegroundColor Green
+            }
+        }
+        catch {
+            Write-Warning "Не удалось отключить службу ${service}: ${_}"
+        }
+    }
+}
+
+# Функция для очистки системы
+function Clean-System {
+    Write-Host "Очистка системы..." -ForegroundColor Cyan
+    
+    try {
+        # Очистка временных файлов
+        if (Test-Path "$env:TEMP") {
+            Remove-Item -Path "$env:TEMP\\*" -Force -Recurse -ErrorAction SilentlyContinue
+            Write-Host "Очищена папка временных файлов пользователя" -ForegroundColor Green
+        }
+        
+        if (Test-Path "C:\\Windows\\Temp") {
+            Remove-Item -Path "C:\\Windows\\Temp\\*" -Force -Recurse -ErrorAction SilentlyContinue
+            Write-Host "Очищена системная папка временных файлов" -ForegroundColor Green
+        }
+        
+        # Очистка корзины
+        try {
+            Clear-RecycleBin -Force -ErrorAction SilentlyContinue
+            Write-Host "Корзина очищена" -ForegroundColor Green
+        } catch {
+            Write-Warning "Не удалось очистить корзину: ${_}"
+        }
+        
+        # Очистка кэша обновлений Windows
+        if (Test-Path "C:\\Windows\\SoftwareDistribution") {
+            try {
+                Stop-Service -Name wuauserv -Force -ErrorAction SilentlyContinue
+                Remove-Item -Path "C:\\Windows\\SoftwareDistribution\\Download\\*" -Force -Recurse -ErrorAction SilentlyContinue
+                Start-Service -Name wuauserv -ErrorAction SilentlyContinue
+                Write-Host "Очищен кэш обновлений Windows" -ForegroundColor Green
+            } catch {
+                Write-Warning "Не удалось очистить кэш обновлений: ${_}"
+            }
+        }
+        
+        Write-Host "Очистка системы выполнена успешно" -ForegroundColor Green
+    }
+    catch {
+        Write-Warning "Ошибка при очистке системы: ${_}"
+    }
+}
+
+# Функция для оптимизации производительности
+function Optimize-Performance {
+    Write-Host "Оптимизация производительности..." -ForegroundColor Cyan
+    
+    try {
+        # Отключение визуальных эффектов
+        try {
+            # Сохраняем текущие настройки
+            $currentSettings = Get-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -ErrorAction SilentlyContinue
+            if ($currentSettings) {
+                Backup-Settings -SettingName "VisualEffects" -Data ($currentSettings | Out-String)
+            }
             
-            if not matches:
-                # Альтернативный способ поиска файлов
-                file_pattern = r"```(\w+)\s+(.+?)\s*\n([\s\S]+?)```"
-                alternative_matches = re.findall(file_pattern, response_text)
+            # Устанавливаем производительность вместо внешнего вида
+            Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -Name "VisualFXSetting" -Type DWord -Value 2 -ErrorAction SilentlyContinue
+            Write-Host "Визуальные эффекты настроены на производительность" -ForegroundColor Green
+        } catch {
+            Write-Warning "Не удалось настроить визуальные эффекты: ${_}"
+        }
+        
+        # Отключение автозапуска программ
+        try {
+            $startupPath = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+            if (Test-Path $startupPath) {
+                # Сохраняем текущие настройки
+                $currentStartup = Get-ItemProperty -Path $startupPath -ErrorAction SilentlyContinue
+                if ($currentStartup) {
+                    Backup-Settings -SettingName "Autorun" -Data ($currentStartup | Out-String)
+                }
                 
-                for ext, desc, content in alternative_matches:
-                    if ext.lower() in ["powershell", "ps1", "batch", "bat", "cmd", "markdown", "md"]:
-                        # Определяем имя файла из расширения
-                        if ext.lower() in ["powershell", "ps1"]:
-                            filename = "WindowsOptimizer.ps1"
-                        elif ext.lower() in ["batch", "bat", "cmd"]:
-                            filename = "Start-Optimizer.bat"
-                        elif ext.lower() in ["markdown", "md"]:
-                            filename = "README.md"
-                        else:
-                            filename = f"file.{ext}"
-                        
-                        files[filename] = content
-            else:
-                # Обработка найденных файлов
-                for ext, desc, name, content in matches:
-                    # Нормализуем имя файла
-                    if not name or name.strip() == "":
-                        # Определяем имя файла из расширения
-                        if ext.lower() in ["powershell", "ps1"]:
-                            name = "WindowsOptimizer.ps1"
-                        elif ext.lower() in ["batch", "bat", "cmd"]:
-                            name = "Start-Optimizer.bat"
-                        elif ext.lower() in ["markdown", "md"]:
-                            name = "README.md"
-                        else:
-                            name = f"file.{ext}"
-                    
-                    # Добавляем расширение, если его нет
-                    if not name.endswith(f".{ext}") and ext.lower() in ["ps1", "bat", "md"]:
-                        name = f"{name}.{ext}"
-                    
-                    files[name] = content
-            
-            logger.info(f"Извлечено {len(files)} файлов из ответа")
-            return files
-            
-        except Exception as e:
-            logger.error(f"Ошибка при извлечении файлов: {e}", exc_info=True)
-            return {}
+                $startupItems = Get-ItemProperty -Path $startupPath
+                foreach ($item in $startupItems.PSObject.Properties) {
+                    if ($item.Name -notlike "PS*") {
+                        Write-Host "Отключение автозапуска: $($item.Name)" -ForegroundColor Yellow
+                        Remove-ItemProperty -Path $startupPath -Name $item.Name -ErrorAction SilentlyContinue
+                    }
+                }
+                Write-Host "Обработка автозагрузки завершена" -ForegroundColor Green
+            }
+        } catch {
+            Write-Warning "Не удалось обработать элементы автозапуска: ${_}"
+        }
+        
+        # Настройка плана электропитания на высокую производительность
+        try {
+            $powerSchemes = powercfg /list | Where-Object { $_ -match "высок|High" }
+            if ($powerSchemes) {
+                $highPerfScheme = $powerSchemes -match "высок|High" | Select-Object -First 1
+                if ($highPerfScheme -match "([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})") {
+                    $schemeGuid = $Matches[1]
+                    powercfg /setactive $schemeGuid
+                    Write-Host "Установлен план электропитания высокой производительности" -ForegroundColor Green
+                }
+            }
+        } catch {
+            Write-Warning "Не удалось настроить план электропитания: ${_}"
+        }
+        
+        Write-Host "Оптимизация производительности выполнена успешно" -ForegroundColor Green
+    }
+    catch {
+        Write-Warning "Ошибка при оптимизации производительности: ${_}"
+    }
+}
+
+# Запуск основной функции
+Optimize-Windows
+
+# Остановка логирования
+Stop-Transcript
+Write-Host "Оптимизация завершена. Лог сохранен в файл: $LogPath" -ForegroundColor Green
+pause
+"""
+        
+        # Batch скрипт для запуска PowerShell
+        template_files["Start-Optimizer.bat"] = """@echo off
+chcp 65001 >nul
+title Запуск оптимизации Windows
+
+:: Проверка прав администратора
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo Скрипт требует запуска от имени администратора.
+    echo Пожалуйста, запустите этот файл от имени администратора.
+    pause
+    exit /b 1
+)
+
+echo Запуск скрипта оптимизации Windows...
+echo ==========================================
+
+:: Запуск PowerShell скрипта с обходом политики выполнения и правильной кодировкой
+powershell -ExecutionPolicy Bypass -NoProfile -File "WindowsOptimizer.ps1"
+
+echo ==========================================
+echo Скрипт оптимизации выполнен.
+pause
+"""
+        
+        # README.md с документацией
+        template_files["README.md"] = """# Скрипт оптимизации Windows
+
+## Описание
+Данный набор скриптов предназначен для оптимизации работы операционной системы Windows. Скрипты выполняют следующие операции:
+- Отключение неиспользуемых служб
+- Очистка временных файлов и кэша
+- Оптимизация производительности
+- Настройка автозагрузки
+
+## Требования
+- Windows 10 или Windows 11
+- Права администратора
+- PowerShell 5.1 или выше
+
+## Использование
+1. Запустите файл `Start-Optimizer.bat` от имени администратора
+2. Дождитесь завершения работы скрипта
+3. Перезагрузите компьютер для применения всех изменений
+
+## Предупреждения
+- Перед запуском скрипта рекомендуется создать точку восстановления системы
+- Все изменения регистра сохраняются в резервные копии в папке `%USERPROFILE%\\WindowsOptimizer_Backups`
+- Лог работы скрипта сохраняется в файл `%TEMP%\\WindowsOptimizer_Log.txt`
+
+## Поддержка
+При возникновении проблем обращайтесь за помощью через Telegram бота.
+"""
+        
+        # Подсчет и возврат найденных файлов
+        logger.info(f"Всего извлечено {len(template_files)} файлов из ответа API")
+        return template_files
     
     async def send_script_files_to_user(self, chat_id, files):
         """Отправляет сгенерированные файлы пользователю в виде архива"""
@@ -475,7 +790,7 @@ class OptimizationBot:
             user_message = user_messages.get(message.chat.id, "Исправь ошибки в скрипте, показанные на скриншоте")
             
             # Используем оптимизированный промпт исправления ошибок
-            prompt = self.error_fix_prompt
+            prompt = self.prompts.get("ERROR_FIX_PROMPT_TEMPLATE", ERROR_FIX_PROMPT_TEMPLATE)
             
             messages = [
                 {
@@ -509,100 +824,127 @@ class OptimizationBot:
                 logger.warning("Не удалось извлечь исправленные файлы из ответа API")
                 return "Не удалось исправить ошибки в скриптах. Пожалуйста, попробуйте еще раз или отправьте другое изображение."
             
-            # Валидация и улучшение скриптов
-            validation_results = self.validator.validate_scripts(files)
-            
-            # Подсчитываем количество ошибок
-            error_count = 0
-            for filename, issues in validation_results.items():
-                error_count += len(issues)
-            
-            # Обновляем статистику ошибок
-            self.update_error_stats(validation_results)
-            
-            # Если остались ошибки, пытаемся их исправить
-            if error_count > 0:
-                logger.info(f"После исправления APIом осталось {error_count} ошибок, применяю автоматические исправления")
-                files = self.validator.repair_common_issues(files)
-                
-                # Повторная валидация после исправлений
-                validation_results = self.validator.validate_scripts(files)
-                
-                # Снова считаем ошибки
-                fixed_error_count = 0
-                for filename, issues in validation_results.items():
-                    fixed_error_count += len(issues)
-                
-                logger.info(f"После исправлений осталось {fixed_error_count} ошибок")
-            
-            # Улучшаем скрипты (добавляем документацию, логирование и т.д.)
-            files = self.validator.enhance_scripts(files)
-            
-            # Обновляем счетчик исправленных скриптов
-            script_gen_count += 1
+            # Дополнительная проверка и исправление скриптов
+            fixed_files, validation_results, errors_corrected = validate_and_fix_scripts(files)
             
             # Обновляем статистику
             self.metrics.record_script_generation({
                 "timestamp": datetime.now().isoformat(),
                 "errors": validation_results,
-                "error_count": error_count,
-                "fixed_count": error_count - fixed_error_count if 'fixed_error_count' in locals() else 0,
+                "error_count": sum(len(issues) for issues in validation_results.values()),
+                "fixed_count": errors_corrected,
                 "model": "claude-3-opus-20240229",
                 "is_error_fix": True
             })
             
             # Сохраняем файлы для последующей отправки
-            user_files[message.chat.id] = files
+            user_files[message.chat.id] = fixed_files
             
-            return files
+            return fixed_files
         
         except Exception as e:
             logger.error(f"Ошибка при исправлении скрипта: {e}", exc_info=True)
             return f"Произошла ошибка при исправлении скрипта: {str(e)}"
     
     def update_error_stats(self, validation_results):
-        """Обновляет статистику ошибок для оптимизации промптов"""
-        global error_stats
+        """
+        Обновляет статистику ошибок
         
-        error_count = 0
-        for filename, issues in validation_results.items():
-            for issue in issues:
-                error_count += 1
-                
-                # Определяем тип ошибки
-                if "PowerShell" in issue and any(syntax in issue for syntax in ["синтаксис", "скобки", "незакрытые"]):
-                    error_stats["ps_syntax"] += 1
-                    self.error_types.setdefault("ps_syntax", 0)
-                    self.error_types["ps_syntax"] += 1
-                    
-                elif "Batch" in issue and "синтаксис" in issue:
-                    error_stats["bat_syntax"] += 1
-                    self.error_types.setdefault("bat_syntax", 0)
-                    self.error_types["bat_syntax"] += 1
-                    
-                elif any(access in issue for access in ["файл", "доступ", "Test-Path"]):
-                    error_stats["file_access"] += 1
-                    self.error_types.setdefault("file_access", 0)
-                    self.error_types["file_access"] += 1
-                    
-                elif any(security in issue for security in ["безопасность", "права"]):
-                    error_stats["security"] += 1
-                    self.error_types.setdefault("security", 0)
-                    self.error_types["security"] += 1
-                    
-                elif "обязательный блок" in issue:
-                    error_stats["missing_blocks"] += 1
-                    self.error_types.setdefault("missing_blocks", 0)
-                    self.error_types["missing_blocks"] += 1
-                    
-                else:
-                    error_stats["other"] += 1
-                    self.error_types.setdefault("other", 0)
-                    self.error_types["other"] += 1
+        Args:
+            validation_results: результаты валидации скриптов
+        """
+        self.metrics.record_validation_results(
+            validation_results=validation_results,
+            model_name="claude-3-opus-20240229",
+            fixed_count=0  # Здесь можно указать количество исправленных ошибок, если оно известно
+        )
+
+    def extract_files(self, response_text):
+        """Извлечение файлов из ответа API
         
-        # Обновляем общий счетчик ошибок
-        error_stats["total_errors"] += error_count
-        self.total_errors += error_count 
+        Args:
+            response_text (str): Текст ответа от API
+            
+        Returns:
+            dict: Словарь с файлами (имя файла -> содержимое)
+        """
+        files = {}
+        
+        # Шаблоны для извлечения блоков кода
+        powershell_pattern = r"```powershell\n(.*?)```"
+        batch_pattern = r"```batch\n(.*?)```"
+        markdown_pattern = r"```markdown\n(.*?)```"
+        
+        # Извлечение PowerShell скрипта
+        ps_matches = re.findall(powershell_pattern, response_text, re.DOTALL)
+        if ps_matches:
+            ps_content = ps_matches[0]
+            # Проверяем на наличие кодировки UTF-8
+            if "$OutputEncoding = [System.Text.Encoding]::UTF8" not in ps_content:
+                ps_content = "# Encoding: UTF-8\n$OutputEncoding = [System.Text.Encoding]::UTF8\n\n" + ps_content
+            files["WindowsOptimizer.ps1"] = ps_content
+            logger.info(f"Извлечен PowerShell скрипт длиной {len(ps_content)} символов")
+        
+        # Извлечение Batch скрипта
+        bat_matches = re.findall(batch_pattern, response_text, re.DOTALL)
+        if bat_matches:
+            bat_content = bat_matches[0]
+            # Проверяем на наличие обязательных команд
+            if "@echo off" not in bat_content:
+                bat_content = "@echo off\n" + bat_content
+            if "chcp 65001" not in bat_content:
+                bat_content = bat_content.replace("@echo off", "@echo off\nchcp 65001 >nul")
+            files["Start-Optimizer.bat"] = bat_content
+            logger.info(f"Извлечен Batch скрипт длиной {len(bat_content)} символов")
+        
+        # Извлечение Markdown документации
+        md_matches = re.findall(markdown_pattern, response_text, re.DOTALL)
+        if md_matches:
+            md_content = md_matches[0]
+            files["README.md"] = md_content
+            logger.info(f"Извлечена документация длиной {len(md_content)} символов")
+        
+        # Проверка на пустые совпадения (ошибки в формате блоков кода)
+        if not ps_matches and not bat_matches and not md_matches:
+            # Пробуем альтернативное извлечение без указания языка
+            alt_pattern = r"```\n(.*?)```"
+            alt_matches = re.findall(alt_pattern, response_text, re.DOTALL)
+            
+            if alt_matches:
+                for i, content in enumerate(alt_matches):
+                    # Пытаемся определить тип файла по содержимому
+                    if "function" in content and "$" in content:
+                        if "$OutputEncoding = [System.Text.Encoding]::UTF8" not in content:
+                            content = "# Encoding: UTF-8\n$OutputEncoding = [System.Text.Encoding]::UTF8\n\n" + content
+                        files["WindowsOptimizer.ps1"] = content
+                        logger.info(f"Извлечен PowerShell скрипт (альт.) длиной {len(content)} символов")
+                    elif "@echo off" in content or "powershell" in content.lower():
+                        if "@echo off" not in content:
+                            content = "@echo off\n" + content
+                        if "chcp 65001" not in content:
+                            content = content.replace("@echo off", "@echo off\nchcp 65001 >nul")
+                        files["Start-Optimizer.bat"] = content
+                        logger.info(f"Извлечен Batch скрипт (альт.) длиной {len(content)} символов")
+                    elif "#" in content and "Windows" in content:
+                        files["README.md"] = content
+                        logger.info(f"Извлечена документация (альт.) длиной {len(content)} символов")
+        
+        # Дополнительная проверка: добавляем файлы, которых не хватает
+        if "WindowsOptimizer.ps1" not in files:
+            files["WindowsOptimizer.ps1"] = self._get_template_scripts()["WindowsOptimizer.ps1"]
+            logger.info("Добавлен шаблонный PowerShell скрипт")
+        
+        if "Start-Optimizer.bat" not in files:
+            files["Start-Optimizer.bat"] = self._get_template_scripts()["Start-Optimizer.bat"]
+            logger.info("Добавлен шаблонный Batch скрипт")
+        
+        if "README.md" not in files:
+            files["README.md"] = self._get_template_scripts()["README.md"]
+            logger.info("Добавлена шаблонная документация")
+        
+        # Подсчет и возврат найденных файлов
+        logger.info(f"Всего извлечено {len(files)} файлов из ответа API")
+        return files
 
 # Обработчик команды /start
 @bot.message_handler(commands=['start'])
@@ -728,7 +1070,7 @@ def cmd_cancel(message):
         markup.add(btn1, btn2)
         
         bot.send_message(
-            message.chat.id,
+            message.chat.id, 
             "❌ Текущая операция отменена. Выберите, что вы хотите сделать:",
             reply_markup=markup
         )
@@ -843,101 +1185,61 @@ def process_error_photo(message):
 @bot.message_handler(content_types=['photo'], func=lambda message: user_states.get(message.chat.id) == "waiting_for_screenshot")
 def process_photo(message):
     try:
-        # Сообщаем пользователю, что начали обработку
-        processing_msg = bot.send_message(
+        user_id = message.from_user.id
+        logger.info(f"Обработка фото от пользователя {user_id}")
+        
+        # Проверка наличия фото
+        if not message.photo:
+            logger.warning(f"Пользователь {user_id} отправил сообщение без фото")
+            bot.send_message(message.chat.id, "⚠️ Пожалуйста, отправьте скриншот в виде фотографии, а не документа.")
+            return
+        
+        # Получаем текст сообщения (если есть) для добавления к промпту
+        user_message_text = message.caption or user_messages.get(message.chat.id, "")
+        
+        # Отправляем сообщение о начале генерации
+        bot.send_message(
             message.chat.id,
-            "🔍 Анализирую скриншот и генерирую скрипты оптимизации...",
-            reply_markup=types.ReplyKeyboardRemove()
+            "🔄 Начинаю генерацию скриптов оптимизации Windows на основе скриншота...\n\n"
+            "⏳ Это может занять до 2-3 минут. Пожалуйста, подождите.",
+            parse_mode='Markdown'
         )
         
-        # Создаем экземпляр бота
+        # Создаем экземпляр OptimizationBot с API ключом
         optimization_bot = OptimizationBot(ANTHROPIC_API_KEY)
         
-        # Вызываем асинхронную функцию через asyncio.run
-        result = asyncio.run(optimization_bot.generate_new_script(message))
+        # Запускаем процесс генерации скрипта асинхронно через asyncio.run
+        results = asyncio.run(optimization_bot.generate_new_script(message))
         
-        if isinstance(result, dict) and len(result) > 0:
-            # Сообщаем об успешной генерации
-            try:
-                bot.edit_message_text(
-                    "✅ Скрипты успешно созданы! Создаю ZIP-архив с файлами...",
-                    message.chat.id,
-                    processing_msg.message_id
-                )
-            except telebot.apihelper.ApiTelegramException as api_error:
-                if "message can't be edited" in str(api_error):
-                    logger.warning(f"Не удалось отредактировать сообщение - сообщение не может быть отредактировано")
-                    # Отправляем новое сообщение вместо редактирования
-                    bot.send_message(
-                        message.chat.id,
-                        "✅ Скрипты успешно созданы! Создаю ZIP-архив с файлами..."
-                    )
-                else:
-                    raise
-            except Exception as edit_error:
-                logger.warning(f"Не удалось отредактировать сообщение: {edit_error}")
-                # Отправляем новое сообщение вместо редактирования
-                bot.send_message(
-                    message.chat.id,
-                    "✅ Скрипты успешно созданы! Создаю ZIP-архив с файлами..."
-                )
+        if isinstance(results, dict):  # Сгенерированы файлы скриптов
+            # Сохраняем файлы для дальнейшего доступа
+            user_files[message.chat.id] = results
             
             # Отправляем файлы пользователю
-            asyncio.run(optimization_bot.send_script_files_to_user(message.chat.id, result))
-            
-            # Возвращаем в главное меню
-            markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
-            btn1 = types.KeyboardButton("🔧 Создать скрипт оптимизации")
-            btn2 = types.KeyboardButton("🔨 Исправить ошибки в скрипте")
-            markup.add(btn1, btn2)
-            
-            bot.send_message(
-                message.chat.id,
-                "Что еще вы хотите сделать?",
-                reply_markup=markup
-            )
-            
-            # Сбрасываем состояние
-            user_states[message.chat.id] = "main_menu"
-            
-        else:
-            # В случае ошибки
             try:
-                bot.edit_message_text(
-                    f"❌ {result}",
-                    message.chat.id,
-                    processing_msg.message_id
-                )
-            except telebot.apihelper.ApiTelegramException as api_error:
-                if "message can't be edited" in str(api_error):
-                    logger.warning(f"Не удалось отредактировать сообщение - сообщение не может быть отредактировано")
-                    # Отправляем новое сообщение вместо редактирования
-                    bot.send_message(
-                        message.chat.id,
-                        f"❌ {result}"
-                    )
-                else:
-                    raise
-            except Exception as edit_error:
-                logger.warning(f"Не удалось отредактировать сообщение: {edit_error}")
-                # Отправляем новое сообщение вместо редактирования
+                asyncio.run(optimization_bot.send_script_files_to_user(message.chat.id, results))
+                logger.info(f"Скрипты успешно отправлены пользователю {user_id}")
+            except Exception as send_error:
+                logger.error(f"Ошибка при отправке файлов: {send_error}")
                 bot.send_message(
-                    message.chat.id,
-                    f"❌ {result}"
+                    message.chat.id, 
+                    "❌ Произошла ошибка при отправке файлов. Пожалуйста, попробуйте еще раз."
                 )
-            
-            # Предлагаем попробовать снова
-            bot.send_message(
-                message.chat.id,
-                "Пожалуйста, отправьте более четкий скриншот с системной информацией или вернитесь в главное меню с помощью команды /cancel."
-            )
+        else:  # Получено сообщение об ошибке
+            logger.error(f"Ошибка при генерации скрипта: {results}")
+            bot.send_message(message.chat.id, results)
+        
+        # Сбрасываем состояние пользователя на главное меню
+        user_states[message.chat.id] = "main_menu"
         
     except Exception as e:
         logger.error(f"Ошибка в обработчике фото: {e}", exc_info=True)
         bot.send_message(
             message.chat.id,
-            f"❌ Произошла ошибка при обработке фото: {str(e)}\n\nПопробуйте отправить другой скриншот или вернитесь в главное меню с помощью команды /cancel."
+            "❌ Произошла ошибка при обработке фото. Пожалуйста, попробуйте еще раз или обратитесь к разработчику."
         )
+        # Возвращаем в главное меню при ошибке
+        user_states[message.chat.id] = "main_menu"
 
 # Обработчик для текстовых сообщений в других состояниях
 @bot.message_handler(func=lambda message: user_states.get(message.chat.id) in ["waiting_for_screenshot", "waiting_for_error_screenshot"])
@@ -969,81 +1271,69 @@ def handle_text_in_photo_states(message):
 # Обработчик команды /stats
 @bot.message_handler(commands=['stats'])
 def cmd_stats(message):
-    """Команда для получения статистики по скриптам"""
+    """Отображает статистику по генерации скриптов"""
     try:
-        # Формируем статистику
-        stats_text = "📊 *Статистика генерации скриптов*\n\n"
+        metrics = ScriptMetrics()
+        stats = metrics.get_summary()
+        common_errors = metrics.get_common_errors()
         
-        # Общая статистика
-        stats_text += f"Всего сгенерировано скриптов: *{script_gen_count}*\n"
-        stats_text += f"Всего ошибок обнаружено: *{error_stats['total_errors']}*\n\n"
+        # Формируем сообщение со статистикой
+        stats_message = f"📊 *Статистика оптимизации*\n\n"
+        stats_message += f"📝 Сгенерировано скриптов: {stats['scripts_generated']}\n"
+        stats_message += f"🔧 Исправлено скриптов: {stats['scripts_fixed']}\n"
+        stats_message += f"⚠️ Всего найдено ошибок: {stats['total_errors']}\n\n"
         
-        # Статистика по типам ошибок (сортировка по частоте)
-        stats_text += "*Типы ошибок:*\n"
+        # Добавляем информацию о типах ошибок
+        stats_message += f"🔍 *Распространенные ошибки:*\n"
+        if common_errors:
+            for error_type, count in common_errors:
+                # Преобразуем технические имена ошибок в понятные описания
+                if error_type == "admin_check_missing":
+                    error_desc = "Отсутствует проверка прав администратора"
+                elif error_type == "error_handling_missing":
+                    error_desc = "Отсутствует обработка ошибок (try-catch)"
+                elif error_type == "utf8_encoding_missing":
+                    error_desc = "Отсутствует установка кодировки UTF-8"
+                elif error_type == "unbalanced_braces":
+                    error_desc = "Несбалансированные скобки в коде"
+                elif error_type == "execution_policy_missing":
+                    error_desc = "Отсутствует параметр ExecutionPolicy Bypass"
+                else:
+                    error_desc = error_type
+                
+                stats_message += f"  • {error_desc}: {count}\n"
+        else:
+            stats_message += "  Пока нет данных о распространенных ошибках\n"
         
-        # Сортируем ошибки по количеству
-        error_types_sorted = sorted(
-            [
-                ("Синтаксис PowerShell", error_stats["ps_syntax"]),
-                ("Синтаксис Batch", error_stats["bat_syntax"]),
-                ("Доступ к файлам", error_stats["file_access"]),
-                ("Безопасность", error_stats["security"]),
-                ("Отсутствующие блоки", error_stats["missing_blocks"]),
-                ("Другие", error_stats["other"])
-            ],
-            key=lambda x: x[1],
-            reverse=True
-        )
+        # Добавляем статистику по типам скриптов
+        stats_message += f"\n📑 *Ошибки по типам скриптов:*\n"
+        stats_message += f"  • PowerShell (.ps1): {stats['ps1_errors']}\n"
+        stats_message += f"  • Batch (.bat): {stats['bat_errors']}\n"
         
-        # Выводим только ненулевые значения
-        for error_type, count in error_types_sorted:
-            if count > 0:
-                stats_text += f"- {error_type}: *{count}*\n"
-        
-        # Статистика PowerShell vs Batch
-        ps_errors = error_stats["ps_syntax"] + error_stats["file_access"] + error_stats["security"]
-        bat_errors = error_stats["bat_syntax"]
-        
-        if ps_errors > 0 or bat_errors > 0:
-            stats_text += f"\n*Распределение ошибок:*\n"
-            stats_text += f"- PowerShell: *{ps_errors}* ошибок\n"
-            stats_text += f"- Batch: *{bat_errors}* ошибок\n"
-        
-        # Отправляем статистику
-        bot.send_message(message.chat.id, stats_text, parse_mode="Markdown")
-        
-        logger.info(f"Пользователь {message.chat.id} запросил статистику")
+        bot.send_message(message.chat.id, stats_message, parse_mode='Markdown')
+    
     except Exception as e:
-        logger.error(f"Ошибка в обработчике команды /stats: {e}")
-        bot.send_message(message.chat.id, "Произошла ошибка при получении статистики. Пожалуйста, попробуйте снова.")
+        logger.error(f"Ошибка при получении статистики: {e}")
+        bot.send_message(message.chat.id, "❌ Не удалось загрузить статистику. Попробуйте позже.")
 
 # Обработчик команды для принудительного обновления промптов
 @bot.message_handler(commands=['update_prompts'])
 def cmd_update_prompts(message):
-    """Команда для обновления промптов"""
+    """Обновляет промпты на основе статистики ошибок"""
     try:
-        # Создаем экземпляр оптимизатора промптов
-        optimizer = PromptOptimizer()
+        metrics = ScriptMetrics()
+        optimizer = PromptOptimizer(metrics=metrics)
         
-        # Пытаемся обновить промпты
-        updated = optimizer.update_prompts_based_on_metrics()
+        success = optimizer.update_prompts_based_on_metrics()
         
-        if updated:
-            bot.send_message(
-                message.chat.id,
-                "✅ Промпты успешно обновлены на основе накопленных данных"
-            )
+        if success:
+            bot.send_message(message.chat.id, "✅ Промпты успешно обновлены на основе статистики ошибок")
         else:
-            bot.send_message(
-                message.chat.id,
-                "ℹ️ Промпты не были обновлены. Недостаточно данных для оптимизации."
-            )
+            bot.send_message(message.chat.id, "ℹ️ Недостаточно данных для оптимизации промптов или произошла ошибка")
+    
     except Exception as e:
         logger.error(f"Ошибка при обновлении промптов: {e}")
-        bot.send_message(
-            message.chat.id,
-            f"❌ Ошибка при обновлении промптов: {str(e)}"
-        )
+        bot.send_message(message.chat.id, "❌ Не удалось обновить промпты. Попробуйте позже.")
 
 def main():
     """Запуск бота"""

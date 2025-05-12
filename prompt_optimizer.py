@@ -3,6 +3,7 @@ import json
 import logging
 from script_metrics import ScriptMetrics
 from collections import Counter
+from datetime import datetime
 
 # Настройка логирования
 logging.basicConfig(
@@ -12,222 +13,203 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class PromptOptimizer:
-    """Класс для оптимизации промптов на основе метрик ошибок"""
+    """Класс для оптимизации промптов на основе накопленных метрик"""
     
-    def __init__(self, base_prompts_file="base_prompts.json"):
-        """Инициализация оптимизатора промптов
-        
-        Args:
-            base_prompts_file (str): Путь к файлу с базовыми промптами
-        """
+    def __init__(self, base_prompts_file="base_prompts.json", optimized_prompts_file="optimized_prompts.json", metrics=None):
         self.base_prompts_file = base_prompts_file
-        self.metrics = ScriptMetrics()
+        self.optimized_prompts_file = optimized_prompts_file
+        self.metrics = metrics
         self.base_prompts = self._load_base_prompts()
-        
-        # Сохраняем имеющиеся промпты для первого запуска
-        if not os.path.exists(self.base_prompts_file):
-            self._save_base_prompts()
+        self.optimized_prompts = self._load_optimized_prompts()
+        # Метрики для анализа производительности промптов
+        self.prompt_metrics = {
+            "successful_generations": 0,
+            "with_errors": 0,
+            "empty_responses": 0,
+            "errors": 0,
+            "regeneration_required": 0,
+            "regenerations_successful": 0,
+            "error_detection": 0,
+            "last_updated": datetime.now().isoformat()
+        }
     
     def _load_base_prompts(self):
-        """Загрузка базовых промптов из файла или создание новых"""
-        if os.path.exists(self.base_prompts_file):
-            try:
+        """Загружает базовые промпты из файла"""
+        try:
+            if os.path.exists(self.base_prompts_file):
                 with open(self.base_prompts_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
-            except json.JSONDecodeError:
-                return self._create_default_prompts()
-        else:
-            return self._create_default_prompts()
+            else:
+                # Создаем файл с дефолтными промптами
+                default_prompts = {
+                    "script_generation": "Создай скрипт PowerShell для оптимизации Windows, используя указанную информацию о системе.",
+                    "error_fixing": "Исправь ошибки в скрипте PowerShell для оптимизации Windows.",
+                    "windows_version_prefix": "Для Windows версии",
+                    "error_description_prefix": "Ошибка скрипта:",
+                    "last_updated": datetime.now().isoformat()
+                }
+                with open(self.base_prompts_file, 'w', encoding='utf-8') as f:
+                    json.dump(default_prompts, f, ensure_ascii=False, indent=4)
+                return default_prompts
+        except Exception as e:
+            logger.error(f"Ошибка при загрузке базовых промптов: {e}")
+            return {
+                "script_generation": "Создай скрипт PowerShell для оптимизации Windows, используя указанную информацию о системе.",
+                "error_fixing": "Исправь ошибки в скрипте PowerShell для оптимизации Windows.",
+                "windows_version_prefix": "Для Windows версии",
+                "error_description_prefix": "Ошибка скрипта:",
+                "last_updated": datetime.now().isoformat()
+            }
     
-    def _create_default_prompts(self):
-        """Создание структуры с промптами по умолчанию"""
-        # Импортируем шаблоны из основного файла
+    def _load_optimized_prompts(self):
+        """Загружает оптимизированные промпты из файла или создает копию базовых"""
         try:
-            from optimization_bot import OPTIMIZATION_PROMPT_TEMPLATE, ERROR_FIX_PROMPT_TEMPLATE
-            
-            return {
-                "OPTIMIZATION_PROMPT_TEMPLATE": OPTIMIZATION_PROMPT_TEMPLATE,
-                "ERROR_FIX_PROMPT_TEMPLATE": ERROR_FIX_PROMPT_TEMPLATE,
-                "version": 1,
-                "error_examples": {}
-            }
-        except ImportError:
-            # Если не удалось импортировать, создаем пустую структуру
-            logger.warning("Не удалось импортировать шаблоны из основного файла")
-            return {
-                "OPTIMIZATION_PROMPT_TEMPLATE": "",
-                "ERROR_FIX_PROMPT_TEMPLATE": "",
-                "version": 1,
-                "error_examples": {}
-            }
-    
-    def _save_base_prompts(self):
-        """Сохранение обновленных промптов в файл"""
-        with open(self.base_prompts_file, 'w', encoding='utf-8') as f:
-            json.dump(self.base_prompts, f, indent=4, ensure_ascii=False)
-    
-    def update_prompts_based_on_metrics(self):
-        """Обновление промптов на основе собранных метрик"""
-        # Получаем метрики
-        summary = self.metrics.get_summary()
-        common_errors = self.metrics.get_common_errors(10)
-        
-        # Если недостаточно данных, пропускаем обновление
-        if summary["total_scripts"] < 5:
-            logger.info("Недостаточно данных для обновления промптов.")
-            return False
-        
-        # Обновляем версию промптов
-        self.base_prompts["version"] += 1
-        
-        # Обновляем примеры ошибок
-        for error_type, count in common_errors:
-            if error_type != "other" and count > 2:
-                # Добавляем примеры ошибок в промпты
-                self.base_prompts["error_examples"][error_type] = count
-        
-        # Обновляем оптимизационный промпт
-        optimization_improvements = self._generate_optimization_improvements(common_errors)
-        if optimization_improvements:
-            current_prompt = self.base_prompts["OPTIMIZATION_PROMPT_TEMPLATE"]
-            
-            # Находим место для вставки улучшений (перед последним блоком)
-            split_point = current_prompt.rfind("Предоставь три файла:")
-            if split_point > 0:
-                updated_prompt = (
-                    current_prompt[:split_point] + 
-                    "\nДОПОЛНИТЕЛЬНЫЕ РЕКОМЕНДАЦИИ НА ОСНОВЕ АНАЛИЗА ЧАСТЫХ ОШИБОК:\n" +
-                    optimization_improvements +
-                    "\n\n" +
-                    current_prompt[split_point:]
-                )
-                self.base_prompts["OPTIMIZATION_PROMPT_TEMPLATE"] = updated_prompt
-        
-        # Обновляем промпт исправления ошибок
-        error_fix_improvements = self._generate_error_fix_improvements(common_errors)
-        if error_fix_improvements:
-            current_prompt = self.base_prompts["ERROR_FIX_PROMPT_TEMPLATE"]
-            
-            # Находим место для вставки улучшений (перед последним блоком)
-            split_point = current_prompt.rfind("Предоставь исправленные версии файлов:")
-            if split_point > 0:
-                updated_prompt = (
-                    current_prompt[:split_point] + 
-                    "\nДОПОЛНИТЕЛЬНЫЕ РЕКОМЕНДАЦИИ НА ОСНОВЕ АНАЛИЗА ЧАСТЫХ ОШИБОК:\n" +
-                    error_fix_improvements +
-                    "\n\n" +
-                    current_prompt[split_point:]
-                )
-                self.base_prompts["ERROR_FIX_PROMPT_TEMPLATE"] = updated_prompt
-        
-        # Сохраняем обновленные промпты
-        self._save_base_prompts()
-        
-        logger.info(f"Промпты успешно обновлены до версии {self.base_prompts['version']}.")
-        return True
-    
-    def _generate_optimization_improvements(self, common_errors):
-        """Генерация улучшений для промпта оптимизации на основе распространенных ошибок"""
-        improvements = []
-        
-        error_types = [error_type for error_type, _ in common_errors]
-        
-        # Добавляем рекомендации в зависимости от типов ошибок
-        if "ps_syntax" in error_types:
-            improvements.append(
-                "1. Обязательно проверяй синтаксис PowerShell скрипта на сбалансированность скобок "
-                "и правильное использование конструкций."
-            )
-        
-        if "bat_syntax" in error_types:
-            improvements.append(
-                "2. В batch файлах всегда добавляй перенаправление ошибок (>nul 2>&1) для команд, "
-                "которые могут выводить ошибки в стандартный поток."
-            )
-        
-        if "file_access" in error_types:
-            improvements.append(
-                "3. Перед каждым доступом к файлу обязательно проверь его существование через Test-Path "
-                "и добавь параметры -Force для операций удаления."
-            )
-        
-        if "security" in error_types:
-            improvements.append(
-                "4. Избегай потенциально опасных конструкций, таких как Invoke-Expression с переменными "
-                "или неконтролируемое выполнение внешнего кода."
-            )
-        
-        # Добавляем общие рекомендации
-        improvements.append(
-            "5. Оборачивай ALL операции в try-catch блоки, чтобы предотвратить аварийное завершение скрипта."
-        )
-        
-        improvements.append(
-            "6. Проверяй права администратора в НАЧАЛЕ скрипта и выходи с понятным сообщением пользователю."
-        )
-        
-        improvements.append(
-            "7. Всегда проверяй существование файлов и дескрипторов перед их использованием."
-        )
-        
-        # Объединяем все рекомендации
-        return "\n".join(improvements)
-    
-    def _generate_error_fix_improvements(self, common_errors):
-        """Генерация улучшений для промпта исправления ошибок на основе распространенных ошибок"""
-        improvements = []
-        
-        error_types = [error_type for error_type, _ in common_errors]
-        
-        # Добавляем рекомендации в зависимости от типов ошибок
-        if "ps_syntax" in error_types:
-            improvements.append(
-                "1. Тщательно проверяй скобки в PowerShell скрипте - несбалансированные скобки "
-                "являются одной из самых распространенных ошибок."
-            )
-        
-        if "bat_syntax" in error_types:
-            improvements.append(
-                "2. Всегда добавляй exit /b с кодом возврата в batch файл, "
-                "чтобы процесс корректно завершался с правильным статусом."
-            )
-        
-        if "file_access" in error_types:
-            improvements.append(
-                "3. При работе с файлами используй специальную обработку для занятых файлов - "
-                "добавь паузу и повторную попытку с ограниченным числом итераций."
-            )
-        
-        # Добавляем общие рекомендации
-        improvements.append(
-            "4. Вместо общих try-catch блоков, используй специфические блоки для каждой "
-            "потенциально опасной операции с точечной обработкой конкретных исключений."
-        )
-        
-        improvements.append(
-            "5. Добавляй проверку версии Windows, чтобы избежать проблем с отсутствующими "
-            "компонентами в разных версиях системы."
-        )
-        
-        improvements.append(
-            "6. Для операций с файлами всегда сначала проверяй Test-Path, а затем используй "
-            "параметры -Force и -ErrorAction SilentlyContinue для максимальной надежности."
-        )
-        
-        # Объединяем все рекомендации
-        return "\n".join(improvements)
+            if os.path.exists(self.optimized_prompts_file):
+                with open(self.optimized_prompts_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            else:
+                # Создаем файл с оптимизированными промптами на основе базовых
+                optimized_prompts = self.base_prompts.copy()
+                optimized_prompts["last_updated"] = datetime.now().isoformat()
+                with open(self.optimized_prompts_file, 'w', encoding='utf-8') as f:
+                    json.dump(optimized_prompts, f, ensure_ascii=False, indent=4)
+                return optimized_prompts
+        except Exception as e:
+            logger.error(f"Ошибка при загрузке оптимизированных промптов: {e}")
+            return self.base_prompts.copy()
     
     def get_optimized_prompts(self):
-        """Получение оптимизированных промптов
+        """Возвращает текущие оптимизированные промпты"""
+        return self.optimized_prompts
+    
+    def _save_optimized_prompts(self):
+        """Сохраняет оптимизированные промпты в файл"""
+        try:
+            self.optimized_prompts["last_updated"] = datetime.now().isoformat()
+            with open(self.optimized_prompts_file, 'w', encoding='utf-8') as f:
+                json.dump(self.optimized_prompts, f, ensure_ascii=False, indent=4)
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка при сохранении оптимизированных промптов: {e}")
+            return False
+    
+    def update_metrics(self, metric_name, value=1):
+        """Обновляет метрику производительности промпта"""
+        if metric_name in self.prompt_metrics:
+            self.prompt_metrics[metric_name] += value
+            return True
+        return False
+    
+    def update_prompts_based_on_metrics(self):
+        """Обновляет промпты на основе собранных метрик"""
+        # Проверяем наличие достаточного количества данных
+        if self.prompt_metrics["successful_generations"] + self.prompt_metrics["with_errors"] < 10:
+            logger.info("Недостаточно данных для обновления промптов.")
+            return False
+            
+        # Если метрики переданы извне, используем их
+        if self.metrics:
+            try:
+                error_stats = self.metrics.get_error_stats()
+                common_errors = self.metrics.get_common_errors()
+                
+                # Проверяем, что есть достаточно данных
+                if error_stats["total"] < 10:
+                    logger.info("Недостаточно данных для оптимизации промптов (менее 10 ошибок)")
+                    return False
+                
+                logger.info(f"Обновление промптов на основе {error_stats['total']} ошибок")
+                
+                # Обновляем промпты на основе статистики ошибок
+                self._update_prompts_with_error_stats(error_stats, common_errors)
+                return True
+            except Exception as e:
+                logger.error(f"Ошибка при обновлении промптов на основе внешних метрик: {e}")
         
-        Returns:
-            dict: Словарь с оптимизированными промптами
-        """
-        return {
-            "OPTIMIZATION_PROMPT_TEMPLATE": self.base_prompts["OPTIMIZATION_PROMPT_TEMPLATE"],
-            "ERROR_FIX_PROMPT_TEMPLATE": self.base_prompts["ERROR_FIX_PROMPT_TEMPLATE"],
-            "version": self.base_prompts["version"]
-        }
+        # Если внешние метрики недоступны, используем внутренние
+        if self.prompt_metrics["error_detection"] > 0 and self.prompt_metrics["with_errors"] > 0:
+            try:
+                self._update_prompts_with_internal_metrics()
+                return True
+            except Exception as e:
+                logger.error(f"Ошибка при обновлении промптов на основе внутренних метрик: {e}")
+        
+        return False
+    
+    def _update_prompts_with_error_stats(self, error_stats, common_errors):
+        """Обновляет промпты на основе статистики ошибок"""
+        # Обновляем промпт для генерации скриптов
+        script_gen_prompt = self.base_prompts["script_generation"]
+        
+        # Добавляем инструкции по наиболее частым ошибкам
+        if common_errors:
+            error_instructions = []
+            for error_type, count in common_errors:
+                if error_type == "admin_check_missing":
+                    error_instructions.append("Обязательно добавь проверку прав администратора")
+                elif error_type == "error_handling_missing":
+                    error_instructions.append("Включи обработку ошибок (try-catch блоки)")
+                elif error_type == "utf8_encoding_missing":
+                    error_instructions.append("Установи кодировку UTF-8 для корректного отображения русских символов")
+                elif error_type == "unbalanced_braces":
+                    error_instructions.append("Проверяй баланс открывающих и закрывающих скобок")
+                elif error_type == "execution_policy_missing":
+                    error_instructions.append("Для BAT файлов используй параметр -ExecutionPolicy Bypass")
+            
+            # Добавляем инструкции к базовому промпту
+            if error_instructions:
+                script_gen_prompt += " " + " ".join(error_instructions) + "."
+        
+        # Добавляем рекомендации по обязательным функциям
+        script_gen_prompt += " Включи функции Backup-Settings (для бэкапа настроек), Optimize-Performance (для оптимизации производительности), Clean-System (для очистки системы) и Disable-Services (для отключения лишних служб)."
+        
+        # Обновляем промпт для исправления ошибок
+        error_fix_prompt = self.base_prompts["error_fixing"]
+        error_fix_prompt += " Проверь и исправь следующие распространенные проблемы: баланс скобок, корректное использование try-catch, установку кодировки UTF-8, проверку прав администратора."
+        
+        # Обновляем оптимизированные промпты
+        self.optimized_prompts["script_generation"] = script_gen_prompt
+        self.optimized_prompts["error_fixing"] = error_fix_prompt
+        
+        # Сохраняем обновленные промпты
+        return self._save_optimized_prompts()
+    
+    def _update_prompts_with_internal_metrics(self):
+        """Обновляет промпты на основе внутренних метрик"""
+        # Определяем общие проблемы на основе внутренней статистики
+        if self.prompt_metrics["regeneration_required"] > 0:
+            # Добавляем улучшения к промптам для предотвращения регенерации
+            script_gen_prompt = self.base_prompts["script_generation"]
+            script_gen_prompt += " Обрати особое внимание на обработку ошибок и проверку параметров."
+            script_gen_prompt += " Убедись, что все блоки try-catch правильно закрыты."
+            script_gen_prompt += " Добавь проверку прав администратора в начале скрипта."
+            script_gen_prompt += " Используй параметр -ErrorAction SilentlyContinue для операций, которые могут вызвать ошибки."
+            
+            # Обновляем промпт исправления ошибок
+            error_fix_prompt = self.base_prompts["error_fixing"]
+            error_fix_prompt += " Обрати внимание на частые проблемы: несбалансированные скобки, отсутствие проверок существования файлов, отсутствие обработки ошибок, проблемы с кодировкой."
+            
+            # Обновляем оптимизированные промпты
+            self.optimized_prompts["script_generation"] = script_gen_prompt
+            self.optimized_prompts["error_fixing"] = error_fix_prompt
+            
+            # Сохраняем обновленные промпты
+            return self._save_optimized_prompts()
+        
+        return False
+    
+    def reset_to_base_prompts(self):
+        """Сбрасывает оптимизированные промпты к базовым значениям"""
+        self.optimized_prompts = self.base_prompts.copy()
+        self.optimized_prompts["last_updated"] = datetime.now().isoformat()
+        success = self._save_optimized_prompts()
+        
+        if success:
+            logger.info("Промпты сброшены к базовым значениям")
+            return True
+        else:
+            logger.error("Не удалось сбросить промпты к базовым значениям")
+            return False
 
 # Пример использования:
 # if __name__ == "__main__":

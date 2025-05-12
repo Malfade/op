@@ -1,14 +1,15 @@
 {
-    "total_scripts_generated": 4,
-    "total_errors_found": 32,
+    "total_scripts_generated": 5,
+    "total_errors_found": 42,
     "total_errors_fixed": 0,
     "error_types": {
         "ps_syntax": 17,
-        "file_access": 2,
+        "file_access": 10,
         "other": 7,
-        "bat_syntax": 3,
+        "bat_syntax": 4,
         "?:function\\s+Backup-Settings|# Создание резервной копии": 2,
-        "?:before|if": 1
+        "?:before|if": 1,
+        "?:function\\s+Backup-Settings|# Создание резервной копии|# Back": 1
     },
     "error_trends": [
         {
@@ -55,6 +56,17 @@
                 "?:function\\s+Backup-Settings|# Создание резервной копии": 1,
                 "other": 1
             }
+        },
+        {
+            "timestamp": "2025-05-12T20:48:26.454360",
+            "model": "unknown",
+            "errors_found": 10,
+            "errors_fixed": 0,
+            "error_types": {
+                "file_access": 8,
+                "?:function\\s+Backup-Settings|# Создание резервной копии|# Back": 1,
+                "bat_syntax": 1
+            }
         }
     ],
     "model_performance": {
@@ -63,7 +75,13 @@
             "total_errors": 32,
             "total_fixed": 0,
             "average_errors_per_script": 8.0
+        },
+        "unknown": {
+            "total_scripts": 1,
+            "total_errors": 10,
+            "total_fixed": 0,
+            "average_errors_per_script": 10.0
         }
     },
-    "last_updated": "2025-05-11T18:25:56.878875"
+    "last_updated": "2025-05-12T20:48:26.454369"
 }
