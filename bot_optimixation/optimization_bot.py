@@ -51,7 +51,6 @@ def ensure_single_instance():
                         logger.error(f"Бот уже запущен (PID: {pid}). Завершаем работу.")
                         return False
                 else:  # Linux/MacOS
-                    import os
                     try:
                         # Отправляем сигнал 0 процессу - не убивает его,
                         # но генерирует ошибку, если процесс не существует
@@ -102,116 +101,8 @@ def ensure_single_instance():
 
 # Глобальная переменная для блокировки
 lock_handle = None
-
-# Проверка на запуск только одного экземпляра бота - кросс-платформенная реализация
-def ensure_single_instance():
-    """
-    Гарантирует запуск только одного экземпляра бота.
-    Работает на Windows, Linux и MacOS.
-    """
-    try:
-        # Определяем путь к файлу блокировки
-        lock_dir = os.path.dirname(os.path.abspath(__file__))
-        lock_file_path = os.path.join(lock_dir, "bot.lock")
-        
-        # Глобальный объект блокировки
-        global lock_handle
-        
-        # Проверяем, существует ли файл блокировки
-        if os.path.exists(lock_file_path):
-            # Проверяем, жив ли процесс, который создал файл
-            try:
-                with open(lock_file_path, 'r') as f:
-                    pid = int(f.read().strip())
-                
-                # Проверка существования процесса (кросс-платформенно)
-                if platform.system() == 'Windows':
-                    import ctypes
-                    kernel32 = ctypes.windll.kernel32
-                    SYNCHRONIZE = 0x00100000
-                    process = kernel32.OpenProcess(SYNCHRONIZE, False, pid)
-                    if process:
-                        kernel32.CloseHandle(process)
-                        # Процесс существует, значит бот уже запущен
-                        logger.error(f"Бот уже запущен (PID: {pid}). Завершаем работу.")
-                        return False
-                else:  # Linux/MacOS
-                    import os
-import platform
-                    try:
-                        # Отправляем сигнал 0 процессу - не убивает его,
-                        # но генерирует ошибку, если процесс не существует
-                        os.kill(pid, 0)
-                        # Процесс существует, значит бот уже запущен
-                        logger.error(f"Бот уже запущен (PID: {pid}). Завершаем работу.")
-                        return False
-                    except OSError:
-                        # Процесс не существует
-                        pass
-            except (ValueError, IOError):
-                # Некорректный PID или не удалось прочитать файл
-                pass
-            
-            # Если мы здесь, значит процесс не существует или файл поврежден
-            # Удаляем старый файл блокировки
-            try:
-                os.remove(lock_file_path)
-                logger.info(f"Удален старый файл блокировки (PID не существует)")
-            except OSError:
-                pass
-        
-        # Создаем новый файл блокировки
-        try:
-            with open(lock_file_path, 'w') as f:
-                f.write(str(os.getpid()))
-            logger.info(f"Бот запущен в единственном экземпляре (PID: {os.getpid()})")
-            
-            # Регистрируем функцию для очистки при завершении
-            def cleanup_lock():
-                try:
-                    if os.path.exists(lock_file_path):
-                        os.remove(lock_file_path)
-                        logger.info("Файл блокировки удален, бот завершает работу")
-                except Exception as e:
-                    logger.error(f"Ошибка при удалении файла блокировки: {e}")
-            
-            atexit.register(cleanup_lock)
-            return True
-        except Exception as e:
-            logger.error(f"Не удалось создать файл блокировки: {e}")
-            return False
-            
-    except Exception as e:
-        logger.error(f"Ошибка при проверке единственного экземпляра: {e}")
-        return False
-
-
-# Проверка на запуск только одного экземпляра бота
-def ensure_single_instance():
-    """
-    Гарантирует запуск только одного экземпляра бота,
-    используя блокировку сокета.
-    """
-    try:
-        # Создаем глобальный сокет для проверки запуска
-        global single_instance_socket
-        single_instance_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        
-        # Пытаемся связать сокет с портом
-        # Если порт уже используется, значит уже запущен экземпляр бота
-        try:
-            single_instance_socket.bind(('localhost', 49152))
-            logger.info("Бот запущен в единственном экземпляре")
-            
-            # Регистрируем функцию для закрытия сокета при завершении
-            atexit.register(lambda: single_instance_socket.close())
-            return True
-        except socket.error:
-            logger.error("Бот уже запущен! Завершаем работу.")
-            return False
-    except Exception as e:
-        logger.error(f"Ошибка при проверке единственного экземпляра: {e}")
-        return False
+# Глобальная переменная для сокета
+single_instance_socket = None
 
 # Импортируем наши модули
 from script_validator import ScriptValidator
@@ -1734,16 +1625,6 @@ def cmd_update_prompts(message):
 def main():
     """Запуск бота"""
     try:
-        # Проверяем, не запущен ли уже бот
-        if not ensure_single_instance():
-            logger.error("Завершаем работу из-за уже запущенного экземпляра")
-            return
-        
-        # Проверяем, не запущен ли уже бот
-        if not ensure_single_instance():
-            logger.error("Завершаем работу из-за уже запущенного экземпляра")
-            return
-        
         # Проверяем, не запущен ли уже бот
         if not ensure_single_instance():
             logger.error("Завершаем работу из-за уже запущенного экземпляра")
