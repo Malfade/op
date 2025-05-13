@@ -326,6 +326,70 @@ python check_anthropic.py
 
 Проект распространяется под лицензией MIT. См. файл LICENSE для деталей.
 
+## Деплой проекта
+
+Для деплоя этого проекта на сервере выполните следующие шаги:
+
+1. **Подготовка сервера**:
+   - Установите Python 3.6 или выше
+   - Установите необходимые библиотеки: `pip install -r requirements.txt`
+   - Создайте директорию для логов: `mkdir logs`
+
+2. **Настройка конфигурации**:
+   - Создайте файл `.env` на основе `example.env`
+   - Добавьте ваши ключи API в файл `.env`:
+     ```
+     TELEGRAM_TOKEN=ваш_токен_telegram_бота
+     ANTHROPIC_API_KEY=ваш_ключ_api_claude
+     CLAUDE_MODEL=claude-3-5-sonnet-20240620
+     LOG_LEVEL=INFO
+     LOG_PATH=./logs
+     ```
+
+3. **Проверка API и окружения**:
+   - Выполните скрипт проверки API Anthropic: `python check_anthropic.py`
+   - Убедитесь, что все необходимые зависимости установлены и работают корректно
+
+4. **Запуск бота**:
+   - В Windows: используйте `start_bot.bat` или `start_bot.ps1`
+   - В Linux: `python optimization_bot.py`
+   - Настройте автоматический перезапуск в случае сбоев (используйте systemd или supervisor)
+
+5. **Мониторинг работы**:
+   - Регулярно проверяйте логи в директории `logs`
+   - Настройте уведомления о сбоях и ошибках
+
+6. **Архивация и резервное копирование**:
+   - Создайте архив с проектом: `Compress-Archive -Path * -DestinationPath windows-optimization-bot.zip -Force`
+   - Храните резервные копии в безопасном месте
+
+### Пример systemd сервиса для Linux
+
+```ini
+[Unit]
+Description=Windows Optimization Bot
+After=network.target
+
+[Service]
+User=username
+WorkingDirectory=/path/to/bot
+ExecStart=/usr/bin/python3 optimization_bot.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Сохраните этот файл как `/etc/systemd/system/windows-optimizer-bot.service`, затем выполните:
+```
+sudo systemctl daemon-reload
+sudo systemctl enable windows-optimizer-bot
+sudo systemctl start windows-optimizer-bot
+```
+
 #   O P B O T 
  
  
