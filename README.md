@@ -389,7 +389,5 @@ sudo systemctl daemon-reload
 sudo systemctl enable windows-optimizer-bot
 sudo systemctl start windows-optimizer-bot
 ```
-
-#   O P B O T 
- 
+#   O P B O T  
  
