@@ -296,143 +296,101 @@ class ScriptValidator:
             return files
     
     def enhance_scripts(self, files):
-        """Улучшает скрипты, добавляя полезные функции
+        """
+        Улучшает скрипты, добавляя полезные функции и повышая удобство использования
         
         Args:
-            files (dict): Словарь с файлами (имя файла -> содержимое)
+            files: словарь с файлами (имя файла -> содержимое)
             
         Returns:
             dict: Словарь с улучшенными файлами
         """
-        try:
-            enhanced_files = {}
-            
-            for filename, content in files.items():
-                try:
-                    # Определяем тип файла по расширению
-                    if filename.lower().endswith('.ps1'):
-                        logger.info(f"Улучшаю PowerShell скрипт: {filename}")
-                        # Добавляем функцию отображения прогресса, если её нет
-                        if "function Show-Progress" not in content:
-                            logger.info("Добавляю функцию отображения прогресса")
-                            progress_function = '''
-# Функция отображения прогресса
-function Show-Progress {
-    param (
-        [string]$Activity,
-        [int]$PercentComplete
-    )
-    
-    Write-Progress -Activity $Activity -PercentComplete $PercentComplete
-    Write-Host "[$($Activity)]: $PercentComplete%" -ForegroundColor Cyan
-}
-'''
-                            # Находим место для вставки (после других функций)
-                            if "function " in content:
-                                last_function = max([m.end() for m in re.finditer(r'function\s+[^{]+{', content)])
-                                function_end = content.find("}", last_function)
-                                if function_end > 0:
-                                    insert_point = content.find("\n", function_end) + 1
-                                    enhanced_content = content[:insert_point] + progress_function + content[insert_point:]
-                                else:
-                                    enhanced_content = content + "\n\n" + progress_function
-                            else:
-                                enhanced_content = content + "\n\n" + progress_function
-                        else:
-                            enhanced_content = content
-                        
-                        # Добавляем логирование, если его нет
-                        if "Write-Log" not in enhanced_content:
-                            try:
-                                logger.info("Добавляю логирование действий скрипта")
-                                log_function = '''
-# Функция для записи в лог
-function Write-Log {
-    param (
-        [string]$Message,
-        [string]$Level = "INFO"
-    )
-    
-    $LogTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-    $LogEntry = "[$LogTime] [$Level] $Message"
-    
-    # Выводим в консоль
-    if ($Level -eq "ERROR") {
-        Write-Host $LogEntry -ForegroundColor Red
-    } elseif ($Level -eq "WARNING") {
-        Write-Host $LogEntry -ForegroundColor Yellow
-    } else {
-        Write-Host $LogEntry -ForegroundColor Green
-    }
-    
-    # Записываем в файл лога
-    $LogEntry | Out-File -FilePath $LogPath -Append -Encoding UTF8
-}
-'''
-                                # Находим строку с объявлением пути к логу
-                                log_path_match = re.search(r'\$LogPath\s*=\s*"([^"]+)"', enhanced_content)
-                                if log_path_match:
-                                    # Вставляем после объявления пути к логу
-                                    insert_point = enhanced_content.find("\n", log_path_match.end()) + 1
-                                    enhanced_content = enhanced_content[:insert_point] + log_function + enhanced_content[insert_point:]
-                                else:
-                                    # Ищем блок с кодировкой
-                                    encoding_match = re.search(r'\$OutputEncoding\s*=\s*\[System\.Text\.Encoding\]::UTF8', enhanced_content)
-                                    if encoding_match:
-                                        insert_point = enhanced_content.find("\n", encoding_match.end()) + 1
-                                        log_path_decl = '\n# Путь к лог-файлу\n$LogPath = "$env:TEMP\\WindowsOptimizer_Log.txt"\n'
-                                        enhanced_content = enhanced_content[:insert_point] + log_path_decl + log_function + enhanced_content[insert_point:]
-                                    else:
-                                        # Вставляем в начало после комментариев
-                                        first_non_comment = re.search(r'[^#\s]', enhanced_content)
-                                        if first_non_comment:
-                                            insert_point = first_non_comment.start()
-                                            log_path_decl = '# Путь к лог-файлу\n$LogPath = "$env:TEMP\\WindowsOptimizer_Log.txt"\n'
-                                            enhanced_content = enhanced_content[:insert_point] + log_path_decl + log_function + "\n" + enhanced_content[insert_point:]
-                                        else:
-                                            # Вставляем в конец
-                                            enhanced_content += "\n\n" + log_function
-                            except Exception as e:
-                                logger.error(f"Ошибка при добавлении логирования: {e}")
-                        
-                        enhanced_files[filename] = enhanced_content
-                        
-                    elif filename.lower().endswith('.bat'):
-                        logger.info(f"Улучшаю Batch скрипт: {filename}")
-                        enhanced_files[filename] = self.enhance_batch_script(content)
-                        
-                    elif filename.lower().endswith('.md'):
-                        logger.info(f"Улучшаю документацию: {filename}")
-                        # Добавляем секцию по устранению проблем, если её нет
-                        if "## Устранение проблем" not in content:
-                            enhanced_content = content + "\n\n## Устранение проблем\n\n"
-                            enhanced_content += "Если вы столкнулись с ошибками при выполнении скриптов, попробуйте следующие решения:\n\n"
-                            enhanced_content += "1. **Ошибка запуска PowerShell скрипта**:\n"
-                            enhanced_content += "   - Убедитесь, что запускаете скрипт от имени администратора\n"
-                            enhanced_content += "   - Проверьте политику выполнения в PowerShell: запустите `Get-ExecutionPolicy` и убедитесь, что разрешено выполнение скриптов\n"
-                            enhanced_content += "   - Если видите ошибки кодировки, откройте скрипт в Notepad++ и сохраните его в кодировке UTF-8\n\n"
-                            enhanced_content += "2. **Ошибки доступа к файлам**:\n"
-                            enhanced_content += "   - Проверьте, что файлы не заблокированы другими программами\n"
-                            enhanced_content += "   - Проверьте права доступа к директориям, используемым в скрипте\n\n"
-                            enhanced_content += "3. **Команды не выполняются**:\n"
-                            enhanced_content += "   - Проверьте наличие необходимых зависимостей и программ\n"
-                            enhanced_content += "   - Убедитесь, что имена файлов и пути не содержат специальных символов\n\n"
-                            enhanced_content += "Если проблема не устраняется, отправьте скриншот с ошибкой для получения помощи."
-                            enhanced_files[filename] = enhanced_content
-                        else:
-                            enhanced_files[filename] = content
-                    else:
-                        # Для других типов файлов просто копируем содержимое
-                        enhanced_files[filename] = content
-                except Exception as e:
-                    logger.error(f"Ошибка при улучшении файла {filename}: {e}")
-                    enhanced_files[filename] = content
-            
-            return enhanced_files
-        except Exception as e:
-            logger.error(f"Ошибка при улучшении скриптов: {e}")
-            return files
+        enhanced_files = files.copy()
         
+        # Улучшаем каждый файл в зависимости от типа
+        for filename, content in files.items():
+            if filename.endswith('.ps1'):
+                enhanced_files[filename] = self._enhance_powershell_script(content)
+                logger.info(f"Улучшаю PowerShell скрипт: {filename}")
+            elif filename.endswith('.bat'):
+                enhanced_files[filename] = self.enhance_batch_script(content)
+                logger.info(f"Улучшаю Batch скрипт: {filename}")
+            elif filename.endswith('.md'):
+                enhanced_files[filename] = self._enhance_markdown(content)
+                logger.info(f"Улучшаю документацию: {filename}")
+        
+        # Добавляем файл Run-Optimizer.ps1 для альтернативного запуска
+        if "WindowsOptimizer.ps1" in files.keys() and "Run-Optimizer.ps1" not in files.keys():
+            logger.info("Создаю альтернативный PowerShell скрипт для запуска")
+            enhanced_files["Run-Optimizer.ps1"] = """# Encoding: UTF-8
+# PowerShell script to launch the main optimization script
+$OutputEncoding = [System.Text.Encoding]::UTF8
+
+# Check administrator rights
+function Test-Administrator {
+    $user = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($user)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+if (-not (Test-Administrator)) {
+    Write-Warning "This script requires administrator privileges."
+    Write-Warning "Please run this file as administrator."
+    pause
+    exit
+}
+
+Write-Host "Starting Windows optimization script..." -ForegroundColor Green
+Write-Host "==========================================" -ForegroundColor Cyan
+
+# Check if the main script exists
+if (Test-Path -Path "WindowsOptimizer.ps1") {
+    # Run the main PowerShell script
+    try {
+        & .\\WindowsOptimizer.ps1
+    } catch {
+        Write-Host "Error running the optimization script: $_" -ForegroundColor Red
+    }
+} else {
+    Write-Host "Error: WindowsOptimizer.ps1 not found in the current directory." -ForegroundColor Red
+    Write-Host "Make sure all files are extracted from the ZIP archive." -ForegroundColor Yellow
+}
+
+Write-Host "==========================================" -ForegroundColor Cyan
+Write-Host "Optimization script completed." -ForegroundColor Green
+pause
+"""
+            
+            # Обновляем инструкцию в README.md
+            if "README.md" in enhanced_files:
+                readme_content = enhanced_files["README.md"]
+                if "Run-Optimizer.ps1" not in readme_content:
+                    insert_point = readme_content.find("## Использование")
+                    if insert_point > 0:
+                        alternative_text = """
+
+### Альтернативный метод запуска (при проблемах с кодировкой)
+Если при запуске batch-файла возникают ошибки с кодировкой (неправильное отображение символов):
+1. Запустите файл `Run-Optimizer.ps1` от имени администратора
+2. Для этого щелкните по файлу правой кнопкой мыши и выберите "Запустить с помощью PowerShell"
+"""
+                        enhanced_files["README.md"] = readme_content[:insert_point+14] + alternative_text + readme_content[insert_point+14:]
+                        logger.info("Обновлена документация с информацией об альтернативном методе запуска")
+            
+            # Добавляем информацию в КАК_ИСПОЛЬЗОВАТЬ.txt, если он существует
+            if "КАК_ИСПОЛЬЗОВАТЬ.txt" in enhanced_files:
+                usage_content = enhanced_files["КАК_ИСПОЛЬЗОВАТЬ.txt"]
+                if "Run-Optimizer.ps1" not in usage_content:
+                    enhanced_files["КАК_ИСПОЛЬЗОВАТЬ.txt"] = usage_content + """
+
+АЛЬТЕРНАТИВНЫЙ СПОСОБ ЗАПУСКА (если возникают ошибки кодировки):
+1. Запустите файл Run-Optimizer.ps1 от имени администратора
+2. Щелкните правой кнопкой мыши по файлу и выберите "Запустить с помощью PowerShell"
+"""
+                    logger.info("Обновлена инструкция КАК_ИСПОЛЬЗОВАТЬ.txt")
+        
+        return enhanced_files
+
     def should_regenerate_script(self, validation_results):
         """Определяет, требуется ли полная регенерация скрипта"""
         critical_issues_count = 0
@@ -653,11 +611,11 @@ function Backup-Settings {
             
                 # Вставляем правильную команду запуска
                 repaired_content = (repaired_content[:insertion_point] + 
-                                  "\necho Запуск скрипта оптимизации Windows...\n" +
+                                  "\necho Starting Windows optimization script...\n" +
                                   "echo ==========================================\n\n" +
                                   "powershell -ExecutionPolicy Bypass -NoProfile -File \"WindowsOptimizer.ps1\"\n\n" +
                                   "echo ==========================================\n" +
-                                  "echo Скрипт оптимизации выполнен.\n" +
+                                  "echo Optimization script completed.\n" +
                                   "pause\n" +
                                   repaired_content[insertion_point:])
         
@@ -670,6 +628,90 @@ function Backup-Settings {
         
         # Исправляем проблемы с экранированием путей
         repaired_content = repaired_content.replace("\\\\", "\\")
+        
+        # НОВОЕ: Проверяем на наличие русских символов и заменяем их на английские
+        # Словарь замен русских фраз на английские
+        ru_to_en = {
+            "Запуск": "Starting",
+            "скрипта": "script",
+            "оптимизации": "optimization",
+            "завершен": "completed",
+            "Windows": "Windows",
+            "Скрипт": "Script",
+            "выполнен": "completed",
+            "требует": "requires",
+            "запуска": "to run",
+            "от имени": "as",
+            "администратора": "administrator",
+            "Пожалуйста": "Please",
+            "запустите": "run",
+            "этот": "this",
+            "файл": "file",
+            "Нажмите": "Press",
+            "любую": "any",
+            "клавишу": "key",
+            "для": "to",
+            "продолжения": "continue",
+            "не найден": "not found",
+            "Убедитесь": "Make sure",
+            "что он": "it is",
+            "находится": "located",
+            "в той же": "in the same",
+            "папке": "folder"
+        }
+        
+        # Собираем шаблон для поиска всех русских слов разом
+        ru_pattern = r'[А-Яа-я]+'
+        
+        # Функция замены, которая заменяет русские слова на английские
+        def replace_ru_text(match):
+            ru_word = match.group(0)
+            # Проверяем, есть ли слово в словаре замен
+            for ru, en in ru_to_en.items():
+                if ru in ru_word:
+                    return en
+            # Если нет точного соответствия, возвращаем общую замену
+            return "text"
+        
+        # Заменяем все русские слова на английские
+        repaired_content = re.sub(ru_pattern, replace_ru_text, repaired_content)
+        
+        # Замена всех оставшихся русских символов
+        cyrillic_pattern = re.compile('[А-Яа-яЁё]')
+        if cyrillic_pattern.search(repaired_content):
+            logger.info("Обнаружены кириллические символы в BAT-файле, заменяю на стандартный шаблон")
+            # Заменяем весь контент стандартным шаблоном
+            repaired_content = """@echo off
+chcp 65001 >nul
+title Windows Optimization
+
+:: Check administrator rights
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo Administrator rights required.
+    echo Please run this file as administrator.
+    pause
+    exit /b 1
+)
+
+:: Script file check
+if not exist "WindowsOptimizer.ps1" (
+    echo File WindowsOptimizer.ps1 not found.
+    echo Please make sure it is in the same folder.
+    pause
+    exit
+)
+
+:: Run PowerShell script with needed parameters
+echo Starting Windows optimization script...
+echo ==========================================
+
+powershell -ExecutionPolicy Bypass -NoProfile -File "WindowsOptimizer.ps1" -Encoding UTF8
+
+echo ==========================================
+echo Optimization script completed.
+pause
+"""
         
         return repaired_content
 
@@ -712,8 +754,135 @@ if %errorlevel% neq 0 (
         if "=========" not in enhanced_content:
             if "powershell" in enhanced_content:
                 pattern = r'(powershell\s+.*WindowsOptimizer\.ps1.*)\n'
-                replacement = "echo Запуск скрипта оптимизации Windows...\necho ==========================================\n\n\\1\n\necho ==========================================\necho Скрипт оптимизации выполнен.\npause\n"
+                replacement = "echo Starting Windows optimization script...\necho ==========================================\n\n\\1\n\necho ==========================================\necho Optimization script completed.\npause\n"
                 enhanced_content = re.sub(pattern, replacement, enhanced_content)
+        
+        return enhanced_content
+        
+    def _enhance_powershell_script(self, content):
+        """Улучшает PowerShell скрипт, добавляя полезные функции
+        
+        Args:
+            content (str): Содержимое PowerShell скрипта
+            
+        Returns:
+            str: Улучшенное содержимое скрипта
+        """
+        enhanced_content = content
+        
+        # Добавляем функцию отображения прогресса, если её нет
+        if "function Show-Progress" not in enhanced_content:
+            logger.info("Добавляю функцию отображения прогресса")
+            progress_function = '''
+# Функция отображения прогресса
+function Show-Progress {
+    param (
+        [string]$Activity,
+        [int]$PercentComplete
+    )
+    
+    Write-Progress -Activity $Activity -PercentComplete $PercentComplete
+    Write-Host "[$($Activity)]: $PercentComplete%" -ForegroundColor Cyan
+}
+'''
+            # Находим место для вставки (после других функций)
+            if "function " in enhanced_content:
+                function_matches = list(re.finditer(r'function\s+[^{]+{', enhanced_content))
+                if function_matches:
+                    last_function = function_matches[-1].end()
+                    function_end = enhanced_content.find("}", last_function)
+                    if function_end > 0:
+                        insert_point = enhanced_content.find("\n", function_end) + 1
+                        enhanced_content = enhanced_content[:insert_point] + progress_function + enhanced_content[insert_point:]
+                    else:
+                        enhanced_content = enhanced_content + "\n\n" + progress_function
+                else:
+                    enhanced_content = enhanced_content + "\n\n" + progress_function
+            else:
+                enhanced_content = enhanced_content + "\n\n" + progress_function
+        
+        # Добавляем логирование, если его нет
+        if "Write-Log" not in enhanced_content:
+            try:
+                logger.info("Добавляю логирование действий скрипта")
+                log_function = '''
+# Функция для записи в лог
+function Write-Log {
+    param (
+        [string]$Message,
+        [string]$Level = "INFO"
+    )
+    
+    $LogTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $LogEntry = "[$LogTime] [$Level] $Message"
+    
+    # Выводим в консоль
+    if ($Level -eq "ERROR") {
+        Write-Host $LogEntry -ForegroundColor Red
+    } elseif ($Level -eq "WARNING") {
+        Write-Host $LogEntry -ForegroundColor Yellow
+    } else {
+        Write-Host $LogEntry -ForegroundColor Green
+    }
+    
+    # Записываем в файл лога
+    $LogEntry | Out-File -FilePath $LogPath -Append -Encoding UTF8
+}
+'''
+                # Находим строку с объявлением пути к логу
+                log_path_match = re.search(r'\$LogPath\s*=\s*"([^"]+)"', enhanced_content)
+                if log_path_match:
+                    # Вставляем после объявления пути к логу
+                    insert_point = enhanced_content.find("\n", log_path_match.end()) + 1
+                    enhanced_content = enhanced_content[:insert_point] + log_function + enhanced_content[insert_point:]
+                else:
+                    # Ищем блок с кодировкой
+                    encoding_match = re.search(r'\$OutputEncoding\s*=\s*\[System\.Text\.Encoding\]::UTF8', enhanced_content)
+                    if encoding_match:
+                        insert_point = enhanced_content.find("\n", encoding_match.end()) + 1
+                        log_path_decl = '\n# Путь к лог-файлу\n$LogPath = "$env:TEMP\\WindowsOptimizer_Log.txt"\n'
+                        enhanced_content = enhanced_content[:insert_point] + log_path_decl + log_function + enhanced_content[insert_point:]
+                    else:
+                        # Вставляем в начало после комментариев
+                        first_non_comment = re.search(r'[^#\s]', enhanced_content)
+                        if first_non_comment:
+                            insert_point = first_non_comment.start()
+                            log_path_decl = '# Путь к лог-файлу\n$LogPath = "$env:TEMP\\WindowsOptimizer_Log.txt"\n'
+                            enhanced_content = enhanced_content[:insert_point] + log_path_decl + log_function + "\n" + enhanced_content[insert_point:]
+                        else:
+                            # Вставляем в конец
+                            enhanced_content += "\n\n" + log_function
+            except Exception as e:
+                logger.error(f"Ошибка при добавлении логирования: {e}")
+        
+        return enhanced_content
+    
+    def _enhance_markdown(self, content):
+        """Улучшает Markdown-документацию, добавляя полезные разделы
+        
+        Args:
+            content (str): Содержимое Markdown-файла
+            
+        Returns:
+            str: Улучшенное содержимое файла
+        """
+        enhanced_content = content
+        
+        # Добавляем секцию по устранению проблем, если её нет
+        if "## Устранение проблем" not in enhanced_content:
+            enhanced_content += "\n\n## Устранение проблем\n\n"
+            enhanced_content += "Если вы столкнулись с ошибками при выполнении скриптов, попробуйте следующие решения:\n\n"
+            enhanced_content += "1. **Ошибка запуска PowerShell скрипта**:\n"
+            enhanced_content += "   - Убедитесь, что запускаете скрипт от имени администратора\n"
+            enhanced_content += "   - Проверьте политику выполнения в PowerShell: запустите `Get-ExecutionPolicy` и убедитесь, что разрешено выполнение скриптов\n"
+            enhanced_content += "   - Если видите ошибки кодировки, откройте скрипт в Notepad++ и сохраните его в кодировке UTF-8\n\n"
+            enhanced_content += "2. **Ошибки доступа к файлам**:\n"
+            enhanced_content += "   - Проверьте, что файлы не заблокированы другими программами\n"
+            enhanced_content += "   - Проверьте права доступа к директориям, используемым в скрипте\n\n"
+            enhanced_content += "3. **Команды не выполняются**:\n"
+            enhanced_content += "   - Проверьте наличие необходимых зависимостей и программ\n"
+            enhanced_content += "   - Убедитесь, что имена файлов и пути не содержат специальных символов\n\n"
+            enhanced_content += "Если проблема не устраняется, отправьте скриншот с ошибкой для получения помощи."
         
         return enhanced_content
 

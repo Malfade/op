@@ -17,7 +17,6 @@ import telebot
 from telebot import types
 from telebot.async_telebot import AsyncTeleBot
 
-
 # Проверка на запуск только одного экземпляра бота - кросс-платформенная реализация
 def ensure_single_instance():
     """
@@ -155,15 +154,19 @@ OPTIMIZATION_PROMPT_TEMPLATE = """Ты эксперт по оптимизаци�
    - Всегда начинай с установки кодировки UTF-8: `$OutputEncoding = [System.Text.Encoding]::UTF8`
    - Проверяй права администратора в самом начале скрипта
    - Все блоки try ДОЛЖНЫ иметь соответствующие блоки catch
-   - Используй правильное форматирование переменных: внутри строк с двоеточием используй `${variable}` вместо `$variable`
+   - НИКОГДА не используй формат ${1}:TEMP в путях - это приводит к ошибкам!
+   - ВСЕГДА используй ТОЛЬКО формат $env:VARIABLENAME для переменных окружения (например: $env:TEMP, $env:APPDATA, $env:USERPROFILE)
+   - Внутри строк с двоеточием используй `${variable}` вместо `$variable`
    - Проверяй существование файлов с помощью Test-Path перед их использованием
    - Добавляй ключ -Force для команд Remove-Item
    - Обеспечь балансировку всех фигурных скобок
    - Для вывода сообщений об ошибках используй формат: `"Сообщение: ${variable}"`
 
 2. Batch файл (.bat):
+   - НИ В КОЕМ СЛУЧАЕ не используй русские символы в BAT-файлах!
    - Обязательно начинай с `@echo off` и `chcp 65001 >nul`
    - Проверяй права администратора
+   - Используй ТОЛЬКО английский текст в bat-файле
    - Добавляй корректные параметры при вызове PowerShell: `-ExecutionPolicy Bypass -NoProfile -File`
    - Используй перенаправление ошибок `>nul 2>&1` для команд
 
@@ -174,241 +177,42 @@ OPTIMIZATION_PROMPT_TEMPLATE = """Ты эксперт по оптимизаци�
 
 Предоставь три файла:
 1. WindowsOptimizer.ps1 - скрипт оптимизации PowerShell, который анализирует систему и оптимизирует её
-2. Start-Optimizer.bat - bat-файл для запуска PowerShell скрипта с нужными параметрами
+2. Start-Optimizer.bat - bat-файл для запуска PowerShell скрипта с нужными параметрами (ТОЛЬКО с английским текстом)
 3. README.md - инструкция по использованию скриптов
 
-Используй шаблоны и структуры, указанные ниже:
+Вот шаблон Batch-файла, которого нужно строго придерживаться:
+```batch
+@echo off
+chcp 65001 >nul
+title Windows Optimization
 
-Для PowerShell скрипта:
-```powershell
-# Encoding: UTF-8
-$OutputEncoding = [System.Text.Encoding]::UTF8
+:: Check administrator rights
+net session >nul 2>&1
+if %errorlevel% neq 0 (
+    echo Administrator rights required.
+    echo Please run this file as administrator.
+    pause
+    exit /b 1
+)
 
-# Set system to use English language for output
-[System.Threading.Thread]::CurrentThread.CurrentUICulture = 'en-US'
-[System.Threading.Thread]::CurrentThread.CurrentCulture = 'en-US'
-
-# Проверка прав администратора
-function Test-Administrator {
-    $user = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal = New-Object Security.Principal.WindowsPrincipal($user)
-    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-}
-
-if (-not (Test-Administrator)) {
-    Write-Warning "This script requires administrator privileges."
-    Write-Warning "Please run the script as administrator."
+:: Script file check
+if not exist "WindowsOptimizer.ps1" (
+    echo File WindowsOptimizer.ps1 not found.
+    echo Please make sure it is in the same folder.
     pause
     exit
-}
+)
 
-# Настройка логирования
-$LogPath = "$env:TEMP\\\\\\WindowsOptimizer_Log.txt"
-Start-Transcript -Path $LogPath -Append -Force
-Write-Host "Logging configured. Log will be saved to: $LogPath" -ForegroundColor Green
+:: Run PowerShell script with needed parameters
+echo Starting Windows optimization script...
+echo ==========================================
 
-# Функция для создания резервных копий настроек
-function Backup-Settings {
-    param (
-        [string]$SettingName,
-        [string]$Data
-    )
-    
-    try {
-        # Создаем директорию для резервных копий, если ее нет
-        $BackupDir = "$env:USERPROFILE\\\\\\WindowsOptimizer_Backups"
-        if (-not (Test-Path -Path $BackupDir)) {
-            New-Item -Path $BackupDir -ItemType Directory -Force | Out-Null
-        }
-        
-        # Формируем имя файла резервной копии
-        $Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-        $BackupFile = "$BackupDir\\\\${SettingName}_$Timestamp.bak"
-        
-        # Сохраняем данные в файл
-        $Data | Out-File -FilePath $BackupFile -Encoding UTF8 -Force
-        
-        Write-Host "Created backup of $SettingName in file $BackupFile" -ForegroundColor Green
-        return $BackupFile
-    }
-    catch {
-        Write-Warning "Failed to create backup of ${SettingName}: ${_}"
-        return $null
-    }
-}
+powershell -ExecutionPolicy Bypass -NoProfile -File "WindowsOptimizer.ps1" -Encoding UTF8
 
-# Функция отображения прогресса
-function Show-Progress {
-    param (
-        [string]$Activity,
-        [int]$PercentComplete
-    )
-    
-    Write-Progress -Activity $Activity -PercentComplete $PercentComplete
-    Write-Host "[$Activity]: $PercentComplete%" -ForegroundColor Cyan
-}
-
-# Основная функция оптимизации
-function Optimize-Windows {
-    Write-Host "Starting Windows optimization..." -ForegroundColor Green
-    
-    # Отключение ненужных служб
-    Show-Progress -Activity "Optimization" -PercentComplete 10
-    Disable-Services
-    
-    # Очистка диска
-    Show-Progress -Activity "Optimization" -PercentComplete 40
-    Clean-System
-    
-    # Оптимизация производительности
-    Show-Progress -Activity "Optimization" -PercentComplete 70
-    Optimize-Performance
-    
-    Show-Progress -Activity "Optimization" -PercentComplete 100
-    Write-Host "Optimization completed successfully!" -ForegroundColor Green
-}
-
-# Функция для отключения ненужных служб
-function Disable-Services {
-    Write-Host "Disabling unused services..." -ForegroundColor Cyan
-    
-    $services = @(
-        "DiagTrack",          # Телеметрия
-        "dmwappushservice",   # Служба WAP Push
-        "SysMain",            # Superfetch
-        "WSearch"             # Поиск Windows
-    )
-    
-    foreach ($service in $services) {
-        try {
-            $serviceObj = Get-Service -Name $service -ErrorAction SilentlyContinue
-            if ($serviceObj -and $serviceObj.Status -eq "Running") {
-                Stop-Service -Name $service -Force -ErrorAction SilentlyContinue
-                Set-Service -Name $service -StartupType Disabled -ErrorAction SilentlyContinue
-                Write-Host "Service $service successfully disabled" -ForegroundColor Green
-            }
-        }
-        catch {
-            Write-Warning "Failed to disable service ${service}: ${_}"
-        }
-    }
-}
-
-# Функция для очистки системы
-function Clean-System {
-    Write-Host "Cleaning system..." -ForegroundColor Cyan
-    
-    try {
-        # Очистка временных файлов
-        if (Test-Path "$env:TEMP") {
-            Remove-Item -Path "$env:TEMP\\*" -Force -Recurse -ErrorAction SilentlyContinue
-            Write-Host "User temporary files folder cleaned" -ForegroundColor Green
-        }
-        
-        if (Test-Path "C:\\\\\\Windows\\Temp") {
-            Remove-Item -Path "C:\\\\\\Windows\\Temp\\*" -Force -Recurse -ErrorAction SilentlyContinue
-            Write-Host "System temporary files folder cleaned" -ForegroundColor Green
-        }
-        
-        # Очистка корзины
-        try {
-            Clear-RecycleBin -Force -ErrorAction SilentlyContinue
-            Write-Host "Recycle Bin emptied" -ForegroundColor Green
-        } catch {
-            Write-Warning "Failed to empty Recycle Bin: ${_}"
-        }
-        
-        # Очистка кэша обновлений Windows
-        if (Test-Path "C:\\\\\\Windows\\\\SoftwareDistribution") {
-            try {
-                Stop-Service -Name wuauserv -Force -ErrorAction SilentlyContinue
-                Remove-Item -Path "C:\\\\\\Windows\\\\SoftwareDistribution\\\\Download\\*" -Force -Recurse -ErrorAction SilentlyContinue
-                Start-Service -Name wuauserv -ErrorAction SilentlyContinue
-                Write-Host "Windows Update cache cleaned" -ForegroundColor Green
-            } catch {
-                Write-Warning "Failed to clean Windows Update cache: ${_}"
-            }
-        }
-        
-        Write-Host "System cleaning completed successfully" -ForegroundColor Green
-    }
-    catch {
-        Write-Warning "Error during system cleaning: ${_}"
-    }
-}
-
-# Функция для оптимизации производительности
-function Optimize-Performance {
-    Write-Host "Optimizing performance..." -ForegroundColor Cyan
-    
-    try {
-        # Отключение визуальных эффектов
-        try {
-            # Сохраняем текущие настройки
-            $currentSettings = Get-ItemProperty -Path "HKCU:\\\\Software\\Microsoft\\\\\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -ErrorAction SilentlyContinue
-            if ($currentSettings) {
-                Backup-Settings -SettingName "VisualEffects" -Data ($currentSettings | Out-String)
-            }
-            
-            # Устанавливаем производительность вместо внешнего вида
-            Set-ItemProperty -Path "HKCU:\\\\Software\\Microsoft\\\\\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -Name "VisualFXSetting" -Type DWord -Value 2 -ErrorAction SilentlyContinue
-            Write-Host "Visual effects set to performance mode" -ForegroundColor Green
-        } catch {
-            Write-Warning "Failed to configure visual effects: ${_}"
-        }
-        
-        # Отключение автозапуска программ
-        try {
-            $startupPath = "HKCU:\\\\Software\\Microsoft\\\\\\Windows\\CurrentVersion\\Run"
-            if (Test-Path $startupPath) {
-                # Сохраняем текущие настройки
-                $currentStartup = Get-ItemProperty -Path $startupPath -ErrorAction SilentlyContinue
-                if ($currentStartup) {
-                    Backup-Settings -SettingName "Autorun" -Data ($currentStartup | Out-String)
-                }
-                
-                $startupItems = Get-ItemProperty -Path $startupPath
-                foreach ($item in $startupItems.PSObject.Properties) {
-                    if ($item.Name -notlike "PS*") {
-                        Write-Host "Disabling autostart: $($item.Name)" -ForegroundColor Yellow
-                        Remove-ItemProperty -Path $startupPath -Name $item.Name -ErrorAction SilentlyContinue
-                    }
-                }
-                Write-Host "Startup items processing completed" -ForegroundColor Green
-            }
-        } catch {
-            Write-Warning "Failed to process startup items: ${_}"
-        }
-        
-        # Настройка плана электропитания на высокую производительность
-        try {
-            $powerSchemes = powercfg /list | Where-Object { $_ -match "высок|High" }
-            if ($powerSchemes) {
-                $highPerfScheme = $powerSchemes -match "высок|High" | Select-Object -First 1
-                if ($highPerfScheme -match "([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})") {
-                    $schemeGuid = $Matches[1]
-                    powercfg /setactive $schemeGuid
-                    Write-Host "High performance power plan activated" -ForegroundColor Green
-                }
-            }
-        } catch {
-            Write-Warning "Failed to configure power plan: ${_}"
-        }
-        
-        Write-Host "Performance optimization completed successfully" -ForegroundColor Green
-    }
-    catch {
-        Write-Warning "Error during performance optimization: ${_}"
-    }
-}
-
-# Запуск основной функции
-Optimize-Windows
-
-# Остановка логирования
-Stop-Transcript
-Write-Host "Optimization completed. Log saved to file: $LogPath" -ForegroundColor Green
+echo ==========================================
+echo Optimization script completed.
 pause
+```
 """
 
 # Шаблон промпта для исправления ошибок в скрипте
@@ -622,19 +426,265 @@ class OptimizationBot:
             logger.error(f"Ошибка при генерации скрипта: {e}")
             return f"Произошла ошибка при генерации скрипта: {str(e)}"
     
-    def _get_template_scripts(self):
+    def _get_template_scripts(self, os_type='windows'):
         """Получение шаблонных скриптов в случае ошибки API
         
+        Args:
+            os_type: тип операционной системы ('windows' или 'macos')
+            
         Returns:
             dict: Словарь с файлами (имя файла -> содержимое)
         """
-        logger.info("Использую шаблонные скрипты из-за ошибки API")
+        logger.info(f"Использую шаблонные скрипты из-за ошибки API для {os_type}")
         
         # Получаем шаблонные скрипты
         template_files = {}
         
-        # PowerShell скрипт - базовый шаблон для оптимизации
-        template_files["WindowsOptimizer.ps1"] = """# Encoding: UTF-8
+        if os_type == 'macos':
+            # MacOS скрипты
+            template_files["MacOptimizer.sh"] = """#!/bin/bash
+
+# Настройка для отображения ошибок
+set -e
+
+# Функция для проверки прав администратора
+check_admin() {
+  if [ "$(id -u)" != "0" ]; then
+    echo "Этот скрипт требует прав администратора."
+    echo "Пожалуйста, запустите скрипт с sudo или используйте StartOptimizer.command"
+    exit 1
+  fi
+}
+
+# Проверяем права администратора
+check_admin
+
+# Настройка логирования
+LOG_FILE="$HOME/Library/Logs/MacOptimizer.log"
+exec > >(tee -a "$LOG_FILE") 2>&1
+echo "Логирование настроено. Лог будет сохранен в: $LOG_FILE"
+
+# Функция для создания резервных копий настроек
+backup_settings() {
+  local setting_name="$1"
+  local data="$2"
+  
+  # Создаем директорию для резервных копий, если её нет
+  BACKUP_DIR="$HOME/MacOptimizer_Backups"
+  if [ ! -d "$BACKUP_DIR" ]; then
+    mkdir -p "$BACKUP_DIR"
+  fi
+  
+  # Формируем имя файла резервной копии
+  TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+  BACKUP_FILE="$BACKUP_DIR/${setting_name}_$TIMESTAMP.bak"
+  
+  # Сохраняем данные в файл
+  echo "$data" > "$BACKUP_FILE"
+  
+  echo "Создана резервная копия $setting_name в файле $BACKUP_FILE"
+  return 0
+}
+
+# Функция отображения прогресса
+show_progress() {
+  local activity="$1"
+  local percent="$2"
+  
+  echo "[$activity]: $percent%"
+}
+
+# Основная функция оптимизации
+optimize_mac() {
+  echo "Начинаю оптимизацию macOS..."
+  
+  # Очистка системы
+  show_progress "Optimization" 10
+  cleanup_system
+  
+  # Оптимизация производительности
+  show_progress "Optimization" 50
+  optimize_performance
+  
+  # Отключение ненужных служб
+  show_progress "Optimization" 80
+  disable_services
+  
+  show_progress "Optimization" 100
+  echo "Оптимизация успешно завершена!"
+}
+
+# Функция для очистки системы
+cleanup_system() {
+  echo "Очистка системы..."
+  
+  # Очистка кэша
+  echo "Очистка пользовательского кэша..."
+  rm -rf "$HOME/Library/Caches/"* 2>/dev/null || true
+  
+  # Очистка временных файлов
+  echo "Очистка временных файлов..."
+  rm -rf /tmp/* 2>/dev/null || true
+  rm -rf "$HOME/Library/Application Support/CrashReporter/"* 2>/dev/null || true
+  
+  # Очистка корзины
+  echo "Очистка корзины..."
+  rm -rf "$HOME/.Trash/"* 2>/dev/null || true
+  
+  # Очистка журналов системы
+  echo "Очистка системных журналов..."
+  sudo rm -rf /var/log/*.gz 2>/dev/null || true
+  sudo rm -rf /var/log/asl/*.asl 2>/dev/null || true
+  
+  echo "Очистка системы завершена успешно"
+}
+
+# Функция для оптимизации производительности
+optimize_performance() {
+  echo "Оптимизация производительности..."
+  
+  # Отключение визуальных эффектов
+  echo "Настройка визуальных эффектов..."
+  
+  # Сохраняем текущие настройки
+  current_settings=$(defaults read com.apple.dock 2>/dev/null || echo "No existing settings")
+  backup_settings "DockSettings" "$current_settings"
+  
+  # Отключаем анимацию при открытии приложений
+  defaults write com.apple.dock launchanim -bool false
+  
+  # Ускоряем Mission Control
+  defaults write com.apple.dock expose-animation-duration -float 0.1
+  
+  # Ускоряем анимации во Finder
+  defaults write com.apple.finder DisableAllAnimations -bool true
+  
+  # Перезапускаем Dock для применения изменений
+  killall Dock
+  
+  # Настройка Spotlight
+  echo "Настройка индексации Spotlight..."
+  sudo mdutil -i off "/"
+  sudo mdutil -i on "/"
+  sudo mdutil -E "/"
+  
+  # Настройка приоритетов процессов
+  echo "Настройка приоритетов процессов..."
+  
+  echo "Оптимизация производительности завершена успешно"
+}
+
+# Функция для отключения ненужных служб
+disable_services() {
+  echo "Отключение ненужных служб..."
+  
+  # Список ненужных служб
+  services=(
+    "com.apple.diagnostics_agent"
+    "com.apple.geod"
+    "com.apple.maps.mapspushd"
+    "com.apple.photoanalysisd"
+  )
+  
+  for service in "${services[@]}"; do
+    if launchctl list | grep -q "$service"; then
+      echo "Отключение службы $service..."
+      launchctl unload -w /System/Library/LaunchAgents/${service}.plist 2>/dev/null || true
+    fi
+  done
+  
+  echo "Отключение ненужных служб завершено успешно"
+}
+
+# Запуск основной функции
+optimize_mac
+
+echo "Оптимизация macOS завершена. Лог сохранен в файл: $LOG_FILE"
+"""
+            
+            # Launcher скрипт для macOS
+            template_files["StartOptimizer.command"] = """#!/bin/bash
+
+# Путь к основному скрипту
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+MAIN_SCRIPT="$SCRIPT_DIR/MacOptimizer.sh"
+
+echo "Запуск оптимизации macOS..."
+echo "===================================="
+
+# Проверяем наличие основного скрипта
+if [ -f "$MAIN_SCRIPT" ]; then
+    # Проверяем права на исполнение
+    if [ ! -x "$MAIN_SCRIPT" ]; then
+        chmod +x "$MAIN_SCRIPT"
+        echo "Права на исполнение установлены"
+    fi
+    
+    # Запускаем скрипт с правами администратора
+    sudo "$MAIN_SCRIPT"
+else
+    echo "Ошибка: Файл $MAIN_SCRIPT не найден."
+    echo "Убедитесь, что все файлы распакованы из архива."
+    exit 1
+fi
+
+echo "===================================="
+echo "Оптимизация macOS завершена."
+read -p "Нажмите Enter для выхода..."
+"""
+            
+            # README.md для macOS
+            template_files["README.md"] = """# Скрипт оптимизации macOS
+
+## Описание
+Данный набор скриптов предназначен для оптимизации работы операционной системы macOS. Скрипты выполняют следующие операции:
+- Очистка кэша и временных файлов
+- Оптимизация производительности
+- Настройка визуальных эффектов
+- Отключение ненужных служб
+
+## Требования
+- macOS 10.15 (Catalina) или новее
+- Права администратора
+- Терминал
+
+## Использование
+Есть два способа запуска скриптов:
+
+### Способ 1: Через StartOptimizer.command (рекомендуется)
+1. Откройте Finder и перейдите в папку со скриптами
+2. Щелкните правой кнопкой мыши на файле `StartOptimizer.command`
+3. Выберите "Открыть"
+4. В окне предупреждения нажмите "Открыть"
+5. Введите пароль администратора, когда будет запрошено
+6. Дождитесь завершения работы скрипта
+
+### Способ 2: Через Терминал
+1. Откройте Терминал
+2. Перейдите в папку со скриптами командой `cd путь/к/папке/со/скриптами`
+3. Сделайте скрипт исполняемым: `chmod +x MacOptimizer.sh`
+4. Запустите скрипт: `sudo ./MacOptimizer.sh`
+5. Дождитесь завершения работы скрипта
+
+## Если скрипт не запускается
+Если при попытке открыть `StartOptimizer.command` появляется сообщение о безопасности:
+1. Откройте "Системные настройки"
+2. Перейдите в раздел "Защита и безопасность"
+3. Нажмите "Подтвердить открытие" или найдите сообщение о блокировке файла
+4. Или откройте Терминал и выполните: `chmod +x путь/к/StartOptimizer.command`
+
+## Предупреждения
+- Перед запуском скрипта рекомендуется создать резервную копию важных данных
+- Все изменения настроек сохраняются в резервные копии в папке `~/MacOptimizer_Backups`
+- Лог работы скрипта сохраняется в файл `~/Library/Logs/MacOptimizer.log`
+
+## Поддержка
+При возникновении проблем обращайтесь за помощью через Telegram бота.
+"""
+        else:
+            # Windows скрипты (оставляем существующий код для Windows)
+            # PowerShell скрипт - базовый шаблон для оптимизации
+            template_files["WindowsOptimizer.ps1"] = """# Encoding: UTF-8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
 # Set system to use English language for output
@@ -656,7 +706,7 @@ if (-not (Test-Administrator)) {
 }
 
 # Настройка логирования
-$LogPath = "$env:TEMP\\\\\\WindowsOptimizer_Log.txt"
+$LogPath = "$env:TEMP\\WindowsOptimizer_Log.txt"
 Start-Transcript -Path $LogPath -Append -Force
 Write-Host "Logging configured. Log will be saved to: $LogPath" -ForegroundColor Green
 
@@ -669,14 +719,14 @@ function Backup-Settings {
     
     try {
         # Создаем директорию для резервных копий, если ее нет
-        $BackupDir = "$env:USERPROFILE\\\\\\WindowsOptimizer_Backups"
+        $BackupDir = "$env:USERPROFILE\\WindowsOptimizer_Backups"
         if (-not (Test-Path -Path $BackupDir)) {
             New-Item -Path $BackupDir -ItemType Directory -Force | Out-Null
         }
         
         # Формируем имя файла резервной копии
         $Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-        $BackupFile = "$BackupDir\\\\${SettingName}_$Timestamp.bak"
+        $BackupFile = "$BackupDir\\${SettingName}_$Timestamp.bak"
         
         # Сохраняем данные в файл
         $Data | Out-File -FilePath $BackupFile -Encoding UTF8 -Force
@@ -758,8 +808,8 @@ function Clean-System {
             Write-Host "User temporary files folder cleaned" -ForegroundColor Green
         }
         
-        if (Test-Path "C:\\\\\\Windows\\Temp") {
-            Remove-Item -Path "C:\\\\\\Windows\\Temp\\*" -Force -Recurse -ErrorAction SilentlyContinue
+        if (Test-Path "C:\\Windows\\Temp") {
+            Remove-Item -Path "C:\\Windows\\Temp\\*" -Force -Recurse -ErrorAction SilentlyContinue
             Write-Host "System temporary files folder cleaned" -ForegroundColor Green
         }
         
@@ -772,10 +822,10 @@ function Clean-System {
         }
         
         # Очистка кэша обновлений Windows
-        if (Test-Path "C:\\\\\\Windows\\\\SoftwareDistribution") {
+        if (Test-Path "C:\\Windows\\SoftwareDistribution") {
             try {
                 Stop-Service -Name wuauserv -Force -ErrorAction SilentlyContinue
-                Remove-Item -Path "C:\\\\\\Windows\\\\SoftwareDistribution\\\\Download\\*" -Force -Recurse -ErrorAction SilentlyContinue
+                Remove-Item -Path "C:\\Windows\\SoftwareDistribution\\Download\\*" -Force -Recurse -ErrorAction SilentlyContinue
                 Start-Service -Name wuauserv -ErrorAction SilentlyContinue
                 Write-Host "Windows Update cache cleaned" -ForegroundColor Green
             } catch {
@@ -798,13 +848,13 @@ function Optimize-Performance {
         # Отключение визуальных эффектов
         try {
             # Сохраняем текущие настройки
-            $currentSettings = Get-ItemProperty -Path "HKCU:\\\\Software\\Microsoft\\\\\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -ErrorAction SilentlyContinue
+            $currentSettings = Get-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -ErrorAction SilentlyContinue
             if ($currentSettings) {
                 Backup-Settings -SettingName "VisualEffects" -Data ($currentSettings | Out-String)
             }
             
             # Устанавливаем производительность вместо внешнего вида
-            Set-ItemProperty -Path "HKCU:\\\\Software\\Microsoft\\\\\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -Name "VisualFXSetting" -Type DWord -Value 2 -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -Name "VisualFXSetting" -Type DWord -Value 2 -ErrorAction SilentlyContinue
             Write-Host "Visual effects set to performance mode" -ForegroundColor Green
         } catch {
             Write-Warning "Failed to configure visual effects: ${_}"
@@ -812,7 +862,7 @@ function Optimize-Performance {
         
         # Отключение автозапуска программ
         try {
-            $startupPath = "HKCU:\\\\Software\\Microsoft\\\\\\Windows\\CurrentVersion\\Run"
+            $startupPath = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
             if (Test-Path $startupPath) {
                 # Сохраняем текущие настройки
                 $currentStartup = Get-ItemProperty -Path $startupPath -ErrorAction SilentlyContinue
@@ -863,9 +913,9 @@ Stop-Transcript
 Write-Host "Optimization completed. Log saved to file: $LogPath" -ForegroundColor Green
 pause
 """
-        
-        # Batch скрипт для запуска PowerShell
-        template_files["Start-Optimizer.bat"] = """@echo off
+            
+            # Batch скрипт для запуска PowerShell
+            template_files["Start-Optimizer.bat"] = """@echo off
 chcp 65001 >nul
 title Windows Optimization
 
@@ -882,15 +932,15 @@ echo Starting Windows optimization script...
 echo ==========================================
 
 :: Run PowerShell script with execution policy bypass
-powershell -ExecutionPolicy Bypass -NoProfile -File "WindowsOptimizer.ps1"
+powershell -ExecutionPolicy Bypass -NoProfile -File "WindowsOptimizer.ps1" -Encoding UTF8
 
 echo ==========================================
 echo Optimization script completed.
 pause
 """
-        
-        # README.md с документацией
-        template_files["README.md"] = """# Скрипт оптимизации Windows
+            
+            # README.md с документацией
+            template_files["README.md"] = """# Скрипт оптимизации Windows
 
 ## Описание
 Данный набор скриптов предназначен для оптимизации работы операционной системы Windows. Скрипты выполняют следующие операции:
@@ -924,16 +974,16 @@ pause
 Если при запуске `Start-Optimizer.bat` возникают ошибки с кодировкой (текст отображается некорректно), используйте файл `Run-Optimizer.ps1` для запуска скрипта из PowerShell.
 
 ## Предупреждения
-- Перед запуском скрипта рекомендуется создать точку восстановления системы
-- Все изменения регистра сохраняются в резервные копии в папке `%USERPROFILE%\\\\\\WindowsOptimizer_Backups`
-- Лог работы скрипта сохраняется в файл `%TEMP%\\\\\\WindowsOptimizer_Log.txt`
+- Перед запуском скриптов оптимизации рекомендуется создать точку восстановления системы
+- Все изменения регистра сохраняются в резервные копии в папке `%USERPROFILE%\\WindowsOptimizer_Backups`
+- Лог работы скрипта сохраняется в файл `%TEMP%\\WindowsOptimizer_Log.txt`
 
 ## Поддержка
 При возникновении проблем обращайтесь за помощью через Telegram бота.
 """
-        
-        # PowerShell файл для запуска основного скрипта (альтернатива .bat файлу)
-        template_files["Run-Optimizer.ps1"] = """# Encoding: UTF-8
+            
+            # PowerShell файл для запуска основного скрипта (альтернатива .bat файлу)
+            template_files["Run-Optimizer.ps1"] = """# Encoding: UTF-8
 # PowerShell script to run the optimization script with proper rights
 $OutputEncoding = [System.Text.Encoding]::UTF8
 
@@ -958,7 +1008,7 @@ Write-Host "==========================================" -ForegroundColor Cyan
 if (Test-Path -Path "WindowsOptimizer.ps1") {
     # Run the main PowerShell script
     try {
-        & .\\\\\\\WindowsOptimizer.ps1
+        & .\\WindowsOptimizer.ps1
     } catch {
         Write-Host "Error running the optimization script: $_" -ForegroundColor Red
     }
@@ -976,12 +1026,171 @@ pause
         logger.info(f"Всего извлечено {len(template_files)} файлов из ответа API")
         return template_files
     
+    def extract_files(self, response_text, os_type='windows'):
+        """Извлечение файлов из ответа API
+        
+        Args:
+            response_text (str): Текст ответа от API
+            os_type (str): Тип операционной системы ('windows' или 'macos')
+            
+        Returns:
+            dict: Словарь с файлами (имя файла -> содержимое)
+        """
+        files = {}
+        
+        if os_type == 'macos':
+            # Шаблоны для извлечения блоков кода для macOS
+            shell_pattern = r"```bash\n(.*?)```"
+            command_pattern = r"```bash\n(.*?)```"
+            markdown_pattern = r"```markdown\n(.*?)```"
+            
+            # Извлечение Shell скрипта
+            shell_matches = re.findall(shell_pattern, response_text, re.DOTALL)
+            if shell_matches and len(shell_matches) >= 1:
+                shell_content = shell_matches[0]
+                # Проверяем на наличие шебанга
+                if "#!/bin/bash" not in shell_content:
+                    shell_content = "#!/bin/bash\n\n" + shell_content
+                files["MacOptimizer.sh"] = shell_content
+                logger.info(f"Извлечен Shell скрипт длиной {len(shell_content)} символов")
+            
+            # Извлечение Command скрипта (launcher)
+            if len(shell_matches) >= 2:
+                command_content = shell_matches[1]
+                # Проверяем на наличие шебанга
+                if "#!/bin/bash" not in command_content:
+                    command_content = "#!/bin/bash\n\n" + command_content
+                files["StartOptimizer.command"] = command_content
+                logger.info(f"Извлечен Command скрипт длиной {len(command_content)} символов")
+            
+            # Извлечение Markdown документации
+            md_matches = re.findall(markdown_pattern, response_text, re.DOTALL)
+            if md_matches:
+                md_content = md_matches[0]
+                files["README.md"] = md_content
+                logger.info(f"Извлечена документация длиной {len(md_content)} символов")
+            
+            # Проверка на пустые совпадения (ошибки в формате блоков кода)
+            if "MacOptimizer.sh" not in files or "StartOptimizer.command" not in files:
+                # Пробуем альтернативное извлечение без указания языка
+                alt_pattern = r"```\n(.*?)```"
+                alt_matches = re.findall(alt_pattern, response_text, re.DOTALL)
+                
+                if alt_matches:
+                    for i, content in enumerate(alt_matches):
+                        # Пытаемся определить тип файла по содержимому
+                        if i == 0 or ("optimize_mac" in content or "cleanup_system" in content):
+                            if "#!/bin/bash" not in content:
+                                content = "#!/bin/bash\n\n" + content
+                            files["MacOptimizer.sh"] = content
+                            logger.info(f"Извлечен Shell скрипт (альт.) длиной {len(content)} символов")
+                        elif i == 1 or "sudo" in content:
+                            if "#!/bin/bash" not in content:
+                                content = "#!/bin/bash\n\n" + content
+                            files["StartOptimizer.command"] = content
+                            logger.info(f"Извлечен Command скрипт (альт.) длиной {len(content)} символов")
+                        elif "#" in content and "macOS" in content:
+                            files["README.md"] = content
+                            logger.info(f"Извлечена документация (альт.) длиной {len(content)} символов")
+            
+            # Дополнительная проверка: добавляем файлы, которых не хватает
+            if "MacOptimizer.sh" not in files:
+                files["MacOptimizer.sh"] = self._get_template_scripts('macos')["MacOptimizer.sh"]
+                logger.info("Добавлен шаблонный Shell скрипт")
+            
+            if "StartOptimizer.command" not in files:
+                files["StartOptimizer.command"] = self._get_template_scripts('macos')["StartOptimizer.command"]
+                logger.info("Добавлен шаблонный Command скрипт")
+            
+            if "README.md" not in files:
+                files["README.md"] = self._get_template_scripts('macos')["README.md"]
+                logger.info("Добавлена шаблонная документация")
+        else:
+            # Шаблоны для извлечения блоков кода для Windows
+            powershell_pattern = r"```powershell\n(.*?)```"
+            batch_pattern = r"```batch\n(.*?)```"
+            markdown_pattern = r"```markdown\n(.*?)```"
+            
+            # Извлечение PowerShell скрипта
+            ps_matches = re.findall(powershell_pattern, response_text, re.DOTALL)
+            if ps_matches:
+                ps_content = ps_matches[0]
+                # Проверяем на наличие кодировки UTF-8
+                if "$OutputEncoding = [System.Text.Encoding]::UTF8" not in ps_content:
+                    ps_content = "# Encoding: UTF-8\n$OutputEncoding = [System.Text.Encoding]::UTF8\n\n" + ps_content
+                files["WindowsOptimizer.ps1"] = ps_content
+                logger.info(f"Извлечен PowerShell скрипт длиной {len(ps_content)} символов")
+            
+            # Извлечение Batch скрипта
+            bat_matches = re.findall(batch_pattern, response_text, re.DOTALL)
+            if bat_matches:
+                bat_content = bat_matches[0]
+                # Проверяем на наличие обязательных команд
+                if "@echo off" not in bat_content:
+                    bat_content = "@echo off\n" + bat_content
+                if "chcp 65001" not in bat_content:
+                    bat_content = bat_content.replace("@echo off", "@echo off\nchcp 65001 >nul")
+                files["Start-Optimizer.bat"] = bat_content
+                logger.info(f"Извлечен Batch скрипт длиной {len(bat_content)} символов")
+            
+            # Извлечение Markdown документации
+            md_matches = re.findall(markdown_pattern, response_text, re.DOTALL)
+            if md_matches:
+                md_content = md_matches[0]
+                files["README.md"] = md_content
+                logger.info(f"Извлечена документация длиной {len(md_content)} символов")
+            
+            # Проверка на пустые совпадения (ошибки в формате блоков кода)
+            if not ps_matches and not bat_matches and not md_matches:
+                # Пробуем альтернативное извлечение без указания языка
+                alt_pattern = r"```\n(.*?)```"
+                alt_matches = re.findall(alt_pattern, response_text, re.DOTALL)
+                
+                if alt_matches:
+                    for i, content in enumerate(alt_matches):
+                        # Пытаемся определить тип файла по содержимому
+                        if "function" in content and "$" in content:
+                            if "$OutputEncoding = [System.Text.Encoding]::UTF8" not in content:
+                                content = "# Encoding: UTF-8\n$OutputEncoding = [System.Text.Encoding]::UTF8\n\n" + content
+                            files["WindowsOptimizer.ps1"] = content
+                            logger.info(f"Извлечен PowerShell скрипт (альт.) длиной {len(content)} символов")
+                        elif "@echo off" in content or "powershell" in content.lower():
+                            if "@echo off" not in content:
+                                content = "@echo off\n" + content
+                            if "chcp 65001" not in content:
+                                content = content.replace("@echo off", "@echo off\nchcp 65001 >nul")
+                            files["Start-Optimizer.bat"] = content
+                            logger.info(f"Извлечен Batch скрипт (альт.) длиной {len(content)} символов")
+                        elif "#" in content and "Windows" in content:
+                            files["README.md"] = content
+                            logger.info(f"Извлечена документация (альт.) длиной {len(content)} символов")
+            
+            # Дополнительная проверка: добавляем файлы, которых не хватает
+            if "WindowsOptimizer.ps1" not in files:
+                files["WindowsOptimizer.ps1"] = self._get_template_scripts('windows')["WindowsOptimizer.ps1"]
+                logger.info("Добавлен шаблонный PowerShell скрипт")
+            
+            if "Start-Optimizer.bat" not in files:
+                files["Start-Optimizer.bat"] = self._get_template_scripts('windows')["Start-Optimizer.bat"]
+                logger.info("Добавлен шаблонный Batch скрипт")
+            
+            if "README.md" not in files:
+                files["README.md"] = self._get_template_scripts('windows')["README.md"]
+                logger.info("Добавлена шаблонная документация")
+        
+        # Подсчет и возврат найденных файлов
+        logger.info(f"Всего извлечено {len(files)} файлов из ответа API")
+        return files
+    
     async def send_script_files_to_user(self, chat_id, files):
         """Отправляет сгенерированные файлы пользователю в виде архива"""
         try:
             if not files:
                 bot.send_message(chat_id, "Не удалось создать файлы скриптов.")
                 return False
+            
+            # Определяем тип ОС по именам файлов
+            is_macos = "MacOptimizer.sh" in files
             
             # Создаем ZIP-архив в памяти
             zip_buffer = BytesIO()
@@ -991,7 +1200,30 @@ pause
                     zip_file.writestr(filename, content)
                 
                 # Добавляем инструкции в архив
-                instructions = """# Инструкция по использованию скриптов оптимизации
+                if is_macos:
+                    instructions = """# Инструкция по использованию скриптов оптимизации macOS
+
+1. Распакуйте все файлы из архива в отдельную папку на вашем Mac.
+
+ЗАПУСК СКРИПТА:
+
+1. Откройте терминал.
+2. Перейдите в папку со скриптами командой: cd путь/к/папке/со/скриптами
+3. Сделайте скрипты исполняемыми с помощью команды:
+   chmod +x MacOptimizer.sh StartOptimizer.command
+4. Запустите скрипт одним из способов:
+   a) Через Finder: дважды щелкните на StartOptimizer.command
+   b) Через Терминал: sudo ./MacOptimizer.sh
+
+ВАЖНЫЕ ПРИМЕЧАНИЯ:
+- Перед запуском создайте резервную копию важных данных.
+- Вас попросят ввести пароль администратора.
+- Скрипты создают резервные копии измененных параметров в папке ~/MacOptimizer_Backups.
+- Все действия скриптов записываются в лог-файл ~/Library/Logs/MacOptimizer.log.
+
+Если у вас возникнут проблемы, используйте команду /help для получения справки."""
+                else:
+                    instructions = """# Инструкция по использованию скриптов оптимизации Windows
 
 1. Распакуйте все файлы из архива в отдельную папку на вашем компьютере.
 
@@ -1021,22 +1253,38 @@ pause
             # Сбрасываем указатель буфера на начало
             zip_buffer.seek(0)
             
+            # Определяем имя архива и текст сообщения в зависимости от ОС
+            if is_macos:
+                archive_name = "MacOptimizer.zip"
+                caption = "✅ Скрипты оптимизации macOS созданы! Распакуйте архив и запустите StartOptimizer.command."
+                additional_msg = "📝 *Инструкция по использованию:*\n\n"\
+                                "1. Распакуйте все файлы из архива в отдельную папку\n"\
+                                "2. Откройте терминал и выполните:\n"\
+                                "   `chmod +x MacOptimizer.sh StartOptimizer.command`\n"\
+                                "3. Запустите файл StartOptimizer.command\n"\
+                                "4. Введите пароль администратора, когда будет запрошено\n\n"\
+                                "ℹ️ Если возникнут ошибки при запуске скрипта, отправьте мне скриншот с ошибкой."
+            else:
+                archive_name = "WindowsOptimizer.zip"
+                caption = "✅ Скрипты оптимизации Windows созданы! Распакуйте архив и запустите Start-Optimizer.bat от имени администратора."
+                additional_msg = "📝 *Инструкция по использованию:*\n\n"\
+                                "1. Распакуйте все файлы из архива в отдельную папку\n"\
+                                "2. Запустите файл Start-Optimizer.bat от имени администратора\n"\
+                                "3. Дождитесь завершения работы скрипта\n\n"\
+                                "ℹ️ Если возникнут ошибки при запуске скрипта, отправьте мне скриншот с ошибкой."
+            
             # Отправляем архив пользователю
             bot.send_document(
                 chat_id=chat_id,
                 document=zip_buffer,
-                caption="✅ Скрипты оптимизации созданы! Распакуйте архив и запустите Start-Optimizer.bat от имени администратора.",
-                visible_file_name="WindowsOptimizer.zip"
+                caption=caption,
+                visible_file_name=archive_name
             )
             
             # Отправляем дополнительное сообщение с инструкциями
             bot.send_message(
                 chat_id=chat_id,
-                text="📝 *Инструкция по использованию:*\n\n"
-                     "1. Распакуйте все файлы из архива в отдельную папку\n"
-                     "2. Запустите файл Start-Optimizer.bat от имени администратора\n"
-                     "3. Дождитесь завершения работы скрипта\n\n"
-                     "ℹ️ Если возникнут ошибки при запуске скрипта, отправьте мне скриншот с ошибкой.",
+                text=additional_msg,
                 parse_mode="Markdown"
             )
             
@@ -1145,93 +1393,6 @@ pause
             model_name="claude-3-opus-20240229",
             fixed_count=0  # Здесь можно указать количество исправленных ошибок, если оно известно
         )
-
-    def extract_files(self, response_text):
-        """Извлечение файлов из ответа API
-        
-        Args:
-            response_text (str): Текст ответа от API
-            
-        Returns:
-            dict: Словарь с файлами (имя файла -> содержимое)
-        """
-        files = {}
-        
-        # Шаблоны для извлечения блоков кода
-        powershell_pattern = r"```powershell\n(.*?)```"
-        batch_pattern = r"```batch\n(.*?)```"
-        markdown_pattern = r"```markdown\n(.*?)```"
-        
-        # Извлечение PowerShell скрипта
-        ps_matches = re.findall(powershell_pattern, response_text, re.DOTALL)
-        if ps_matches:
-            ps_content = ps_matches[0]
-            # Проверяем на наличие кодировки UTF-8
-            if "$OutputEncoding = [System.Text.Encoding]::UTF8" not in ps_content:
-                ps_content = "# Encoding: UTF-8\n$OutputEncoding = [System.Text.Encoding]::UTF8\n\n" + ps_content
-            files["WindowsOptimizer.ps1"] = ps_content
-            logger.info(f"Извлечен PowerShell скрипт длиной {len(ps_content)} символов")
-        
-        # Извлечение Batch скрипта
-        bat_matches = re.findall(batch_pattern, response_text, re.DOTALL)
-        if bat_matches:
-            bat_content = bat_matches[0]
-            # Проверяем на наличие обязательных команд
-            if "@echo off" not in bat_content:
-                bat_content = "@echo off\n" + bat_content
-            if "chcp 65001" not in bat_content:
-                bat_content = bat_content.replace("@echo off", "@echo off\nchcp 65001 >nul")
-            files["Start-Optimizer.bat"] = bat_content
-            logger.info(f"Извлечен Batch скрипт длиной {len(bat_content)} символов")
-        
-        # Извлечение Markdown документации
-        md_matches = re.findall(markdown_pattern, response_text, re.DOTALL)
-        if md_matches:
-            md_content = md_matches[0]
-            files["README.md"] = md_content
-            logger.info(f"Извлечена документация длиной {len(md_content)} символов")
-        
-        # Проверка на пустые совпадения (ошибки в формате блоков кода)
-        if not ps_matches and not bat_matches and not md_matches:
-            # Пробуем альтернативное извлечение без указания языка
-            alt_pattern = r"```\n(.*?)```"
-            alt_matches = re.findall(alt_pattern, response_text, re.DOTALL)
-            
-            if alt_matches:
-                for i, content in enumerate(alt_matches):
-                    # Пытаемся определить тип файла по содержимому
-                    if "function" in content and "$" in content:
-                        if "$OutputEncoding = [System.Text.Encoding]::UTF8" not in content:
-                            content = "# Encoding: UTF-8\n$OutputEncoding = [System.Text.Encoding]::UTF8\n\n" + content
-                        files["WindowsOptimizer.ps1"] = content
-                        logger.info(f"Извлечен PowerShell скрипт (альт.) длиной {len(content)} символов")
-                    elif "@echo off" in content or "powershell" in content.lower():
-                        if "@echo off" not in content:
-                            content = "@echo off\n" + content
-                        if "chcp 65001" not in content:
-                            content = content.replace("@echo off", "@echo off\nchcp 65001 >nul")
-                        files["Start-Optimizer.bat"] = content
-                        logger.info(f"Извлечен Batch скрипт (альт.) длиной {len(content)} символов")
-                    elif "#" in content and "Windows" in content:
-                        files["README.md"] = content
-                        logger.info(f"Извлечена документация (альт.) длиной {len(content)} символов")
-        
-        # Дополнительная проверка: добавляем файлы, которых не хватает
-        if "WindowsOptimizer.ps1" not in files:
-            files["WindowsOptimizer.ps1"] = self._get_template_scripts()["WindowsOptimizer.ps1"]
-            logger.info("Добавлен шаблонный PowerShell скрипт")
-        
-        if "Start-Optimizer.bat" not in files:
-            files["Start-Optimizer.bat"] = self._get_template_scripts()["Start-Optimizer.bat"]
-            logger.info("Добавлен шаблонный Batch скрипт")
-        
-        if "README.md" not in files:
-            files["README.md"] = self._get_template_scripts()["README.md"]
-            logger.info("Добавлена шаблонная документация")
-        
-        # Подсчет и возврат найденных файлов
-        logger.info(f"Всего извлечено {len(files)} файлов из ответа API")
-        return files
 
 # Обработчик команды /start
 @bot.message_handler(commands=['start'])
@@ -1629,7 +1790,7 @@ def main():
         if not ensure_single_instance():
             logger.error("Завершаем работу из-за уже запущенного экземпляра")
             return
-        
+            
         logger.info("Запуск бота...")
         
         # Инициализация оптимизатора промптов
