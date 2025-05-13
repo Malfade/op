@@ -1,4 +1,6 @@
 import os
+import socket
+import atexit
 import logging
 import json
 import base64
@@ -13,6 +15,34 @@ from dotenv import load_dotenv
 import telebot
 from telebot import types
 from telebot.async_telebot import AsyncTeleBot
+
+
+# Проверка на запуск только одного экземпляра бота
+def ensure_single_instance():
+    """
+    Гарантирует запуск только одного экземпляра бота,
+    используя блокировку сокета.
+    """
+    try:
+        # Создаем глобальный сокет для проверки запуска
+        global single_instance_socket
+        single_instance_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        
+        # Пытаемся связать сокет с портом
+        # Если порт уже используется, значит уже запущен экземпляр бота
+        try:
+            single_instance_socket.bind(('localhost', 49152))
+            logger.info("Бот запущен в единственном экземпляре")
+            
+            # Регистрируем функцию для закрытия сокета при завершении
+            atexit.register(lambda: single_instance_socket.close())
+            return True
+        except socket.error:
+            logger.error("Бот уже запущен! Завершаем работу.")
+            return False
+    except Exception as e:
+        logger.error(f"Ошибка при проверке единственного экземпляра: {e}")
+        return False
 
 # Импортируем наши модули
 from script_validator import ScriptValidator
@@ -113,7 +143,7 @@ if (-not (Test-Administrator)) {
 }
 
 # Настройка логирования
-$LogPath = "$env:TEMP\\WindowsOptimizer_Log.txt"
+$LogPath = "$env:TEMP\\\\WindowsOptimizer_Log.txt"
 Start-Transcript -Path $LogPath -Append -Force
 Write-Host "Logging configured. Log will be saved to: $LogPath" -ForegroundColor Green
 
@@ -126,7 +156,7 @@ function Backup-Settings {
     
     try {
         # Создаем директорию для резервных копий, если ее нет
-        $BackupDir = "$env:USERPROFILE\\WindowsOptimizer_Backups"
+        $BackupDir = "$env:USERPROFILE\\\\WindowsOptimizer_Backups"
         if (-not (Test-Path -Path $BackupDir)) {
             New-Item -Path $BackupDir -ItemType Directory -Force | Out-Null
         }
@@ -215,8 +245,8 @@ function Clean-System {
             Write-Host "User temporary files folder cleaned" -ForegroundColor Green
         }
         
-        if (Test-Path "C:\\Windows\\Temp") {
-            Remove-Item -Path "C:\\Windows\\Temp\\*" -Force -Recurse -ErrorAction SilentlyContinue
+        if (Test-Path "C:\\\\Windows\\Temp") {
+            Remove-Item -Path "C:\\\\Windows\\Temp\\*" -Force -Recurse -ErrorAction SilentlyContinue
             Write-Host "System temporary files folder cleaned" -ForegroundColor Green
         }
         
@@ -229,10 +259,10 @@ function Clean-System {
         }
         
         # Очистка кэша обновлений Windows
-        if (Test-Path "C:\\Windows\\SoftwareDistribution") {
+        if (Test-Path "C:\\\\Windows\\SoftwareDistribution") {
             try {
                 Stop-Service -Name wuauserv -Force -ErrorAction SilentlyContinue
-                Remove-Item -Path "C:\\Windows\\SoftwareDistribution\\Download\\*" -Force -Recurse -ErrorAction SilentlyContinue
+                Remove-Item -Path "C:\\\\Windows\\SoftwareDistribution\\Download\\*" -Force -Recurse -ErrorAction SilentlyContinue
                 Start-Service -Name wuauserv -ErrorAction SilentlyContinue
                 Write-Host "Windows Update cache cleaned" -ForegroundColor Green
             } catch {
@@ -255,13 +285,13 @@ function Optimize-Performance {
         # Отключение визуальных эффектов
         try {
             # Сохраняем текущие настройки
-            $currentSettings = Get-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -ErrorAction SilentlyContinue
+            $currentSettings = Get-ItemProperty -Path "HKCU:\\Software\\Microsoft\\\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -ErrorAction SilentlyContinue
             if ($currentSettings) {
                 Backup-Settings -SettingName "VisualEffects" -Data ($currentSettings | Out-String)
             }
             
             # Устанавливаем производительность вместо внешнего вида
-            Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -Name "VisualFXSetting" -Type DWord -Value 2 -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -Name "VisualFXSetting" -Type DWord -Value 2 -ErrorAction SilentlyContinue
             Write-Host "Visual effects set to performance mode" -ForegroundColor Green
         } catch {
             Write-Warning "Failed to configure visual effects: ${_}"
@@ -269,7 +299,7 @@ function Optimize-Performance {
         
         # Отключение автозапуска программ
         try {
-            $startupPath = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+            $startupPath = "HKCU:\\Software\\Microsoft\\\\Windows\\CurrentVersion\\Run"
             if (Test-Path $startupPath) {
                 # Сохраняем текущие настройки
                 $currentStartup = Get-ItemProperty -Path $startupPath -ErrorAction SilentlyContinue
@@ -566,7 +596,7 @@ if (-not (Test-Administrator)) {
 }
 
 # Настройка логирования
-$LogPath = "$env:TEMP\\WindowsOptimizer_Log.txt"
+$LogPath = "$env:TEMP\\\\WindowsOptimizer_Log.txt"
 Start-Transcript -Path $LogPath -Append -Force
 Write-Host "Logging configured. Log will be saved to: $LogPath" -ForegroundColor Green
 
@@ -579,7 +609,7 @@ function Backup-Settings {
     
     try {
         # Создаем директорию для резервных копий, если ее нет
-        $BackupDir = "$env:USERPROFILE\\WindowsOptimizer_Backups"
+        $BackupDir = "$env:USERPROFILE\\\\WindowsOptimizer_Backups"
         if (-not (Test-Path -Path $BackupDir)) {
             New-Item -Path $BackupDir -ItemType Directory -Force | Out-Null
         }
@@ -668,8 +698,8 @@ function Clean-System {
             Write-Host "User temporary files folder cleaned" -ForegroundColor Green
         }
         
-        if (Test-Path "C:\\Windows\\Temp") {
-            Remove-Item -Path "C:\\Windows\\Temp\\*" -Force -Recurse -ErrorAction SilentlyContinue
+        if (Test-Path "C:\\\\Windows\\Temp") {
+            Remove-Item -Path "C:\\\\Windows\\Temp\\*" -Force -Recurse -ErrorAction SilentlyContinue
             Write-Host "System temporary files folder cleaned" -ForegroundColor Green
         }
         
@@ -682,10 +712,10 @@ function Clean-System {
         }
         
         # Очистка кэша обновлений Windows
-        if (Test-Path "C:\\Windows\\SoftwareDistribution") {
+        if (Test-Path "C:\\\\Windows\\SoftwareDistribution") {
             try {
                 Stop-Service -Name wuauserv -Force -ErrorAction SilentlyContinue
-                Remove-Item -Path "C:\\Windows\\SoftwareDistribution\\Download\\*" -Force -Recurse -ErrorAction SilentlyContinue
+                Remove-Item -Path "C:\\\\Windows\\SoftwareDistribution\\Download\\*" -Force -Recurse -ErrorAction SilentlyContinue
                 Start-Service -Name wuauserv -ErrorAction SilentlyContinue
                 Write-Host "Windows Update cache cleaned" -ForegroundColor Green
             } catch {
@@ -708,13 +738,13 @@ function Optimize-Performance {
         # Отключение визуальных эффектов
         try {
             # Сохраняем текущие настройки
-            $currentSettings = Get-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -ErrorAction SilentlyContinue
+            $currentSettings = Get-ItemProperty -Path "HKCU:\\Software\\Microsoft\\\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -ErrorAction SilentlyContinue
             if ($currentSettings) {
                 Backup-Settings -SettingName "VisualEffects" -Data ($currentSettings | Out-String)
             }
             
             # Устанавливаем производительность вместо внешнего вида
-            Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -Name "VisualFXSetting" -Type DWord -Value 2 -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -Name "VisualFXSetting" -Type DWord -Value 2 -ErrorAction SilentlyContinue
             Write-Host "Visual effects set to performance mode" -ForegroundColor Green
         } catch {
             Write-Warning "Failed to configure visual effects: ${_}"
@@ -722,7 +752,7 @@ function Optimize-Performance {
         
         # Отключение автозапуска программ
         try {
-            $startupPath = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+            $startupPath = "HKCU:\\Software\\Microsoft\\\\Windows\\CurrentVersion\\Run"
             if (Test-Path $startupPath) {
                 # Сохраняем текущие настройки
                 $currentStartup = Get-ItemProperty -Path $startupPath -ErrorAction SilentlyContinue
@@ -825,7 +855,7 @@ pause
 
 ### Способ 2: Через командную строку
 1. Запустите командную строку от имени администратора
-2. Перейдите в папку со скриптами командой `cd путь\к\папке\со\скриптами`
+2. Перейдите в папку со скриптами командой `cd путь\\к\\папке\\со\\скриптами`
 3. Выполните команду `Start-Optimizer.bat`
 4. Дождитесь завершения работы скрипта
 5. Перезагрузите компьютер для применения всех изменений
@@ -835,8 +865,8 @@ pause
 
 ## Предупреждения
 - Перед запуском скрипта рекомендуется создать точку восстановления системы
-- Все изменения регистра сохраняются в резервные копии в папке `%USERPROFILE%\\WindowsOptimizer_Backups`
-- Лог работы скрипта сохраняется в файл `%TEMP%\\WindowsOptimizer_Log.txt`
+- Все изменения регистра сохраняются в резервные копии в папке `%USERPROFILE%\\\\WindowsOptimizer_Backups`
+- Лог работы скрипта сохраняется в файл `%TEMP%\\\\WindowsOptimizer_Log.txt`
 
 ## Поддержка
 При возникновении проблем обращайтесь за помощью через Telegram бота.
@@ -868,7 +898,7 @@ Write-Host "==========================================" -ForegroundColor Cyan
 if (Test-Path -Path "WindowsOptimizer.ps1") {
     # Run the main PowerShell script
     try {
-        & .\WindowsOptimizer.ps1
+        & .\\\WindowsOptimizer.ps1
     } catch {
         Write-Host "Error running the optimization script: $_" -ForegroundColor Red
     }
@@ -912,7 +942,7 @@ pause
 
 СПОСОБ 2: Запуск через командную строку
 - Запустите командную строку от имени администратора
-- Перейдите в папку со скриптами командой: cd путь\к\папке\со\скриптами
+- Перейдите в папку со скриптами командой: cd путь\\к\\папке\\со\\скриптами
 - Выполните команду: Start-Optimizer.bat
 
 ЕСЛИ ВОЗНИКАЮТ ОШИБКИ КОДИРОВКИ:
@@ -1535,6 +1565,11 @@ def cmd_update_prompts(message):
 def main():
     """Запуск бота"""
     try:
+        # Проверяем, не запущен ли уже бот
+        if not ensure_single_instance():
+            logger.error("Завершаем работу из-за уже запущенного экземпляра")
+            return
+        
         logger.info("Запуск бота...")
         
         # Инициализация оптимизатора промптов
