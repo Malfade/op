@@ -1,4 +1,5 @@
 import os
+import platform
 import socket
 import atexit
 import logging
@@ -15,6 +16,174 @@ from dotenv import load_dotenv
 import telebot
 from telebot import types
 from telebot.async_telebot import AsyncTeleBot
+
+
+# Проверка на запуск только одного экземпляра бота - кросс-платформенная реализация
+def ensure_single_instance():
+    """
+    Гарантирует запуск только одного экземпляра бота.
+    Работает на Windows, Linux и MacOS.
+    """
+    try:
+        # Определяем путь к файлу блокировки
+        lock_dir = os.path.dirname(os.path.abspath(__file__))
+        lock_file_path = os.path.join(lock_dir, "bot.lock")
+        
+        # Глобальный объект блокировки
+        global lock_handle
+        
+        # Проверяем, существует ли файл блокировки
+        if os.path.exists(lock_file_path):
+            # Проверяем, жив ли процесс, который создал файл
+            try:
+                with open(lock_file_path, 'r') as f:
+                    pid = int(f.read().strip())
+                
+                # Проверка существования процесса (кросс-платформенно)
+                if platform.system() == 'Windows':
+                    import ctypes
+                    kernel32 = ctypes.windll.kernel32
+                    SYNCHRONIZE = 0x00100000
+                    process = kernel32.OpenProcess(SYNCHRONIZE, False, pid)
+                    if process:
+                        kernel32.CloseHandle(process)
+                        # Процесс существует, значит бот уже запущен
+                        logger.error(f"Бот уже запущен (PID: {pid}). Завершаем работу.")
+                        return False
+                else:  # Linux/MacOS
+                    import os
+                    try:
+                        # Отправляем сигнал 0 процессу - не убивает его,
+                        # но генерирует ошибку, если процесс не существует
+                        os.kill(pid, 0)
+                        # Процесс существует, значит бот уже запущен
+                        logger.error(f"Бот уже запущен (PID: {pid}). Завершаем работу.")
+                        return False
+                    except OSError:
+                        # Процесс не существует
+                        pass
+            except (ValueError, IOError):
+                # Некорректный PID или не удалось прочитать файл
+                pass
+            
+            # Если мы здесь, значит процесс не существует или файл поврежден
+            # Удаляем старый файл блокировки
+            try:
+                os.remove(lock_file_path)
+                logger.info(f"Удален старый файл блокировки (PID не существует)")
+            except OSError:
+                pass
+        
+        # Создаем новый файл блокировки
+        try:
+            with open(lock_file_path, 'w') as f:
+                f.write(str(os.getpid()))
+            logger.info(f"Бот запущен в единственном экземпляре (PID: {os.getpid()})")
+            
+            # Регистрируем функцию для очистки при завершении
+            def cleanup_lock():
+                try:
+                    if os.path.exists(lock_file_path):
+                        os.remove(lock_file_path)
+                        logger.info("Файл блокировки удален, бот завершает работу")
+                except Exception as e:
+                    logger.error(f"Ошибка при удалении файла блокировки: {e}")
+            
+            atexit.register(cleanup_lock)
+            return True
+        except Exception as e:
+            logger.error(f"Не удалось создать файл блокировки: {e}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Ошибка при проверке единственного экземпляра: {e}")
+        return False
+
+
+# Глобальная переменная для блокировки
+lock_handle = None
+
+# Проверка на запуск только одного экземпляра бота - кросс-платформенная реализация
+def ensure_single_instance():
+    """
+    Гарантирует запуск только одного экземпляра бота.
+    Работает на Windows, Linux и MacOS.
+    """
+    try:
+        # Определяем путь к файлу блокировки
+        lock_dir = os.path.dirname(os.path.abspath(__file__))
+        lock_file_path = os.path.join(lock_dir, "bot.lock")
+        
+        # Глобальный объект блокировки
+        global lock_handle
+        
+        # Проверяем, существует ли файл блокировки
+        if os.path.exists(lock_file_path):
+            # Проверяем, жив ли процесс, который создал файл
+            try:
+                with open(lock_file_path, 'r') as f:
+                    pid = int(f.read().strip())
+                
+                # Проверка существования процесса (кросс-платформенно)
+                if platform.system() == 'Windows':
+                    import ctypes
+                    kernel32 = ctypes.windll.kernel32
+                    SYNCHRONIZE = 0x00100000
+                    process = kernel32.OpenProcess(SYNCHRONIZE, False, pid)
+                    if process:
+                        kernel32.CloseHandle(process)
+                        # Процесс существует, значит бот уже запущен
+                        logger.error(f"Бот уже запущен (PID: {pid}). Завершаем работу.")
+                        return False
+                else:  # Linux/MacOS
+                    import os
+import platform
+                    try:
+                        # Отправляем сигнал 0 процессу - не убивает его,
+                        # но генерирует ошибку, если процесс не существует
+                        os.kill(pid, 0)
+                        # Процесс существует, значит бот уже запущен
+                        logger.error(f"Бот уже запущен (PID: {pid}). Завершаем работу.")
+                        return False
+                    except OSError:
+                        # Процесс не существует
+                        pass
+            except (ValueError, IOError):
+                # Некорректный PID или не удалось прочитать файл
+                pass
+            
+            # Если мы здесь, значит процесс не существует или файл поврежден
+            # Удаляем старый файл блокировки
+            try:
+                os.remove(lock_file_path)
+                logger.info(f"Удален старый файл блокировки (PID не существует)")
+            except OSError:
+                pass
+        
+        # Создаем новый файл блокировки
+        try:
+            with open(lock_file_path, 'w') as f:
+                f.write(str(os.getpid()))
+            logger.info(f"Бот запущен в единственном экземпляре (PID: {os.getpid()})")
+            
+            # Регистрируем функцию для очистки при завершении
+            def cleanup_lock():
+                try:
+                    if os.path.exists(lock_file_path):
+                        os.remove(lock_file_path)
+                        logger.info("Файл блокировки удален, бот завершает работу")
+                except Exception as e:
+                    logger.error(f"Ошибка при удалении файла блокировки: {e}")
+            
+            atexit.register(cleanup_lock)
+            return True
+        except Exception as e:
+            logger.error(f"Не удалось создать файл блокировки: {e}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Ошибка при проверке единственного экземпляра: {e}")
+        return False
 
 
 # Проверка на запуск только одного экземпляра бота
@@ -143,7 +312,7 @@ if (-not (Test-Administrator)) {
 }
 
 # Настройка логирования
-$LogPath = "$env:TEMP\\\\WindowsOptimizer_Log.txt"
+$LogPath = "$env:TEMP\\\\\\WindowsOptimizer_Log.txt"
 Start-Transcript -Path $LogPath -Append -Force
 Write-Host "Logging configured. Log will be saved to: $LogPath" -ForegroundColor Green
 
@@ -156,14 +325,14 @@ function Backup-Settings {
     
     try {
         # Создаем директорию для резервных копий, если ее нет
-        $BackupDir = "$env:USERPROFILE\\\\WindowsOptimizer_Backups"
+        $BackupDir = "$env:USERPROFILE\\\\\\WindowsOptimizer_Backups"
         if (-not (Test-Path -Path $BackupDir)) {
             New-Item -Path $BackupDir -ItemType Directory -Force | Out-Null
         }
         
         # Формируем имя файла резервной копии
         $Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-        $BackupFile = "$BackupDir\\${SettingName}_$Timestamp.bak"
+        $BackupFile = "$BackupDir\\\\${SettingName}_$Timestamp.bak"
         
         # Сохраняем данные в файл
         $Data | Out-File -FilePath $BackupFile -Encoding UTF8 -Force
@@ -245,8 +414,8 @@ function Clean-System {
             Write-Host "User temporary files folder cleaned" -ForegroundColor Green
         }
         
-        if (Test-Path "C:\\\\Windows\\Temp") {
-            Remove-Item -Path "C:\\\\Windows\\Temp\\*" -Force -Recurse -ErrorAction SilentlyContinue
+        if (Test-Path "C:\\\\\\Windows\\Temp") {
+            Remove-Item -Path "C:\\\\\\Windows\\Temp\\*" -Force -Recurse -ErrorAction SilentlyContinue
             Write-Host "System temporary files folder cleaned" -ForegroundColor Green
         }
         
@@ -259,10 +428,10 @@ function Clean-System {
         }
         
         # Очистка кэша обновлений Windows
-        if (Test-Path "C:\\\\Windows\\SoftwareDistribution") {
+        if (Test-Path "C:\\\\\\Windows\\\\SoftwareDistribution") {
             try {
                 Stop-Service -Name wuauserv -Force -ErrorAction SilentlyContinue
-                Remove-Item -Path "C:\\\\Windows\\SoftwareDistribution\\Download\\*" -Force -Recurse -ErrorAction SilentlyContinue
+                Remove-Item -Path "C:\\\\\\Windows\\\\SoftwareDistribution\\\\Download\\*" -Force -Recurse -ErrorAction SilentlyContinue
                 Start-Service -Name wuauserv -ErrorAction SilentlyContinue
                 Write-Host "Windows Update cache cleaned" -ForegroundColor Green
             } catch {
@@ -285,13 +454,13 @@ function Optimize-Performance {
         # Отключение визуальных эффектов
         try {
             # Сохраняем текущие настройки
-            $currentSettings = Get-ItemProperty -Path "HKCU:\\Software\\Microsoft\\\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -ErrorAction SilentlyContinue
+            $currentSettings = Get-ItemProperty -Path "HKCU:\\\\Software\\Microsoft\\\\\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -ErrorAction SilentlyContinue
             if ($currentSettings) {
                 Backup-Settings -SettingName "VisualEffects" -Data ($currentSettings | Out-String)
             }
             
             # Устанавливаем производительность вместо внешнего вида
-            Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -Name "VisualFXSetting" -Type DWord -Value 2 -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path "HKCU:\\\\Software\\Microsoft\\\\\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -Name "VisualFXSetting" -Type DWord -Value 2 -ErrorAction SilentlyContinue
             Write-Host "Visual effects set to performance mode" -ForegroundColor Green
         } catch {
             Write-Warning "Failed to configure visual effects: ${_}"
@@ -299,7 +468,7 @@ function Optimize-Performance {
         
         # Отключение автозапуска программ
         try {
-            $startupPath = "HKCU:\\Software\\Microsoft\\\\Windows\\CurrentVersion\\Run"
+            $startupPath = "HKCU:\\\\Software\\Microsoft\\\\\\Windows\\CurrentVersion\\Run"
             if (Test-Path $startupPath) {
                 # Сохраняем текущие настройки
                 $currentStartup = Get-ItemProperty -Path $startupPath -ErrorAction SilentlyContinue
@@ -596,7 +765,7 @@ if (-not (Test-Administrator)) {
 }
 
 # Настройка логирования
-$LogPath = "$env:TEMP\\\\WindowsOptimizer_Log.txt"
+$LogPath = "$env:TEMP\\\\\\WindowsOptimizer_Log.txt"
 Start-Transcript -Path $LogPath -Append -Force
 Write-Host "Logging configured. Log will be saved to: $LogPath" -ForegroundColor Green
 
@@ -609,14 +778,14 @@ function Backup-Settings {
     
     try {
         # Создаем директорию для резервных копий, если ее нет
-        $BackupDir = "$env:USERPROFILE\\\\WindowsOptimizer_Backups"
+        $BackupDir = "$env:USERPROFILE\\\\\\WindowsOptimizer_Backups"
         if (-not (Test-Path -Path $BackupDir)) {
             New-Item -Path $BackupDir -ItemType Directory -Force | Out-Null
         }
         
         # Формируем имя файла резервной копии
         $Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-        $BackupFile = "$BackupDir\\${SettingName}_$Timestamp.bak"
+        $BackupFile = "$BackupDir\\\\${SettingName}_$Timestamp.bak"
         
         # Сохраняем данные в файл
         $Data | Out-File -FilePath $BackupFile -Encoding UTF8 -Force
@@ -698,8 +867,8 @@ function Clean-System {
             Write-Host "User temporary files folder cleaned" -ForegroundColor Green
         }
         
-        if (Test-Path "C:\\\\Windows\\Temp") {
-            Remove-Item -Path "C:\\\\Windows\\Temp\\*" -Force -Recurse -ErrorAction SilentlyContinue
+        if (Test-Path "C:\\\\\\Windows\\Temp") {
+            Remove-Item -Path "C:\\\\\\Windows\\Temp\\*" -Force -Recurse -ErrorAction SilentlyContinue
             Write-Host "System temporary files folder cleaned" -ForegroundColor Green
         }
         
@@ -712,10 +881,10 @@ function Clean-System {
         }
         
         # Очистка кэша обновлений Windows
-        if (Test-Path "C:\\\\Windows\\SoftwareDistribution") {
+        if (Test-Path "C:\\\\\\Windows\\\\SoftwareDistribution") {
             try {
                 Stop-Service -Name wuauserv -Force -ErrorAction SilentlyContinue
-                Remove-Item -Path "C:\\\\Windows\\SoftwareDistribution\\Download\\*" -Force -Recurse -ErrorAction SilentlyContinue
+                Remove-Item -Path "C:\\\\\\Windows\\\\SoftwareDistribution\\\\Download\\*" -Force -Recurse -ErrorAction SilentlyContinue
                 Start-Service -Name wuauserv -ErrorAction SilentlyContinue
                 Write-Host "Windows Update cache cleaned" -ForegroundColor Green
             } catch {
@@ -738,13 +907,13 @@ function Optimize-Performance {
         # Отключение визуальных эффектов
         try {
             # Сохраняем текущие настройки
-            $currentSettings = Get-ItemProperty -Path "HKCU:\\Software\\Microsoft\\\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -ErrorAction SilentlyContinue
+            $currentSettings = Get-ItemProperty -Path "HKCU:\\\\Software\\Microsoft\\\\\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -ErrorAction SilentlyContinue
             if ($currentSettings) {
                 Backup-Settings -SettingName "VisualEffects" -Data ($currentSettings | Out-String)
             }
             
             # Устанавливаем производительность вместо внешнего вида
-            Set-ItemProperty -Path "HKCU:\\Software\\Microsoft\\\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -Name "VisualFXSetting" -Type DWord -Value 2 -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path "HKCU:\\\\Software\\Microsoft\\\\\\Windows\\CurrentVersion\\Explorer\\VisualEffects" -Name "VisualFXSetting" -Type DWord -Value 2 -ErrorAction SilentlyContinue
             Write-Host "Visual effects set to performance mode" -ForegroundColor Green
         } catch {
             Write-Warning "Failed to configure visual effects: ${_}"
@@ -752,7 +921,7 @@ function Optimize-Performance {
         
         # Отключение автозапуска программ
         try {
-            $startupPath = "HKCU:\\Software\\Microsoft\\\\Windows\\CurrentVersion\\Run"
+            $startupPath = "HKCU:\\\\Software\\Microsoft\\\\\\Windows\\CurrentVersion\\Run"
             if (Test-Path $startupPath) {
                 # Сохраняем текущие настройки
                 $currentStartup = Get-ItemProperty -Path $startupPath -ErrorAction SilentlyContinue
@@ -865,8 +1034,8 @@ pause
 
 ## Предупреждения
 - Перед запуском скрипта рекомендуется создать точку восстановления системы
-- Все изменения регистра сохраняются в резервные копии в папке `%USERPROFILE%\\\\WindowsOptimizer_Backups`
-- Лог работы скрипта сохраняется в файл `%TEMP%\\\\WindowsOptimizer_Log.txt`
+- Все изменения регистра сохраняются в резервные копии в папке `%USERPROFILE%\\\\\\WindowsOptimizer_Backups`
+- Лог работы скрипта сохраняется в файл `%TEMP%\\\\\\WindowsOptimizer_Log.txt`
 
 ## Поддержка
 При возникновении проблем обращайтесь за помощью через Telegram бота.
@@ -898,7 +1067,7 @@ Write-Host "==========================================" -ForegroundColor Cyan
 if (Test-Path -Path "WindowsOptimizer.ps1") {
     # Run the main PowerShell script
     try {
-        & .\\\WindowsOptimizer.ps1
+        & .\\\\\\\WindowsOptimizer.ps1
     } catch {
         Write-Host "Error running the optimization script: $_" -ForegroundColor Red
     }
@@ -1565,6 +1734,16 @@ def cmd_update_prompts(message):
 def main():
     """Запуск бота"""
     try:
+        # Проверяем, не запущен ли уже бот
+        if not ensure_single_instance():
+            logger.error("Завершаем работу из-за уже запущенного экземпляра")
+            return
+        
+        # Проверяем, не запущен ли уже бот
+        if not ensure_single_instance():
+            logger.error("Завершаем работу из-за уже запущенного экземпляра")
+            return
+        
         # Проверяем, не запущен ли уже бот
         if not ensure_single_instance():
             logger.error("Завершаем работу из-за уже запущенного экземпляра")
