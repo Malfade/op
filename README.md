@@ -326,4 +326,5 @@ python check_anthropic.py
 
 Проект распространяется под лицензией MIT. См. файл LICENSE для деталей.
 
-ananasi
+ananasi#   o p t i m i z a t o r  
+ 
