@@ -97,8 +97,30 @@ class MockResponse:
                     "```\n\n"
                     "Этот скрипт решает проблемы с кодировкой, генерируя корректные PowerShell и Batch скрипты. Просто сохраните его как `generate_script.bat` и запустите."
                 )
+                # Добавляем атрибуты для совместимости с разными версиями API
+                self.type = "text"
         
+        # Создаем базовую структуру ответа от API
         self.content = [Content()]
+        self.messages = self
+        self.id = "mock_response_id"
+        self.type = "message"
+        self.role = "assistant"
+        self.model = "claude-mock"
+        self.stop_reason = "mock_stop"
+        self.stop_sequence = None
+        self.usage = {
+            "input_tokens": 0,
+            "output_tokens": 0
+        }
+    
+    def create(self, *args, **kwargs):
+        """Имитирует вызов client.messages.create() в новых версиях API"""
+        logger.info("Вызов mock-метода create()")
+        # Можно обработать kwargs для более точной имитации ответа
+        model = kwargs.get('model', 'claude-mock')
+        logger.info(f"Запрошенная модель: {model}")
+        return self
 
 def patch_anthropic_module():
     """
@@ -182,9 +204,22 @@ def patch_anthropic_module():
                     raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
                 
                 if name == 'messages':
-                    if self._messages is None:
-                        self._messages = MockResponse()
-                    return self._messages
+                    # Для структуры API v0.8+: client.messages.create()
+                    mock_response = MockResponse()
+                    if self._client is None:
+                        logger.warning("Клиент не инициализирован, возвращаем mock для messages")
+                        return mock_response
+                    try:
+                        # Проверяем существование атрибута messages у клиента
+                        messages_attr = getattr(self._client, 'messages', None)
+                        if messages_attr is not None:
+                            return messages_attr
+                        else:
+                            logger.warning("У клиента нет атрибута messages, возвращаем mock")
+                            return mock_response
+                    except Exception as e:
+                        logger.error(f"Ошибка при доступе к client.messages: {e}")
+                        return mock_response
                 
                 if self._client is None:
                     # Попытка повторной инициализации только один раз
@@ -205,7 +240,23 @@ def patch_anthropic_module():
                 """
                 if self._client is None:
                     # Возвращаем шаблонный ответ
+                    logger.warning("Вызов метода у неинициализированного клиента, возвращаем MockResponse")
                     return MockResponse()
+                
+                # Проверяем, есть ли параметр model в kwargs (для API v0.8+)
+                if 'model' in kwargs:
+                    logger.info(f"Обнаружен вызов API с параметром model={kwargs.get('model')}, используем версию 0.8+")
+                    
+                    # Пытаемся обратиться к методу messages.create
+                    try:
+                        if hasattr(self._client, 'messages') and hasattr(self._client.messages, 'create'):
+                            return self._client.messages.create(*args, **kwargs)
+                        else:
+                            logger.warning("Структура API не содержит messages.create, используем mock")
+                            return MockResponse()
+                    except Exception as e:
+                        logger.error(f"Ошибка вызова client.messages.create: {e}")
+                        return MockResponse()
                 
                 # Вызов метода оригинального клиента
                 try:
@@ -407,28 +458,30 @@ def main():
             # Используем патченную версию Anthropic
             logger.info("Инициализация OptimizationBot с патченной версией Anthropic")
             
-            # Проверяем, есть ли глобальный экземпляр клиента
-            if 'GLOBAL_ANTHROPIC_CLIENT' in globals() and GLOBAL_ANTHROPIC_CLIENT is not None:
-                self.client = anthropic.Anthropic(api_key=api_key)  # При вызове вернется существующий экземпляр
-                logger.info("Использован существующий глобальный экземпляр клиента Anthropic")
-            else:
-                try:
-                    # Используем клиент непосредственно без повторной инициализации обертки
-                    if hasattr(anthropic, '_original_Anthropic'):
-                        # Нет необходимости создавать обертку снова, так как она уже создана
-                        # и заменила собой класс Anthropic
+            # Проверка версии Anthropic и установка соответствующего клиента
+            try:
+                anthropic_version = getattr(anthropic, '__version__', 'неизвестна')
+                logger.info(f"Определена версия anthropic: {anthropic_version}")
+                
+                # Создаем клиент в зависимости от версии API
+                if hasattr(anthropic, '_original_Anthropic'):
+                    self.client = anthropic.Anthropic(api_key=api_key)
+                    logger.info("Использована патченная версия Anthropic API")
+                else:
+                    # Пробуем создать стандартный клиент
+                    try:
                         self.client = anthropic.Anthropic(api_key=api_key)
-                        logger.info("Успешно создан экземпляр патченного клиента Anthropic")
-                    else:
-                        # Если по какой-то причине замена класса не произошла,
-                        # используем прямое присваивание модуля
-                        logger.warning("Оригинальный класс Anthropic не сохранен, использую модуль напрямую")
-                        self.client = anthropic
-                except Exception as e:
-                    logger.error(f"Ошибка при создании патченного клиента Anthropic: {e}")
-                    # Используем прямое присваивание модуля в случае ошибки
-                    self.client = anthropic
-                    logger.warning("Используется запасной вариант - прямое присваивание модуля anthropic")
+                        logger.info("Создан стандартный клиент Anthropic API")
+                    except Exception as e:
+                        logger.error(f"Ошибка создания клиента Anthropic: {e}")
+                        # Если не получается создать клиент, используем наш MockResponse
+                        self.client = MockResponse()
+                        logger.warning("Используется mock-объект вместо клиента Anthropic")
+            except Exception as e:
+                logger.error(f"Ошибка при инициализации клиента Anthropic: {e}")
+                # В случае любой ошибки используем наш mock
+                self.client = MockResponse()
+                logger.warning("Используется mock-объект из-за ошибки инициализации")
         
         # Заменяем метод инициализации
         OptimizationBot.__init__ = patched_init
