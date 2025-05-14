@@ -126,8 +126,15 @@ def main():
         logger.info("Запуск optimization_bot.py")
         import optimization_bot
         logger.info("Файл optimization_bot.py успешно импортирован")
+        
+        # Явно вызываем функцию main из модуля optimization_bot
+        if hasattr(optimization_bot, 'main'):
+            logger.info("Запуск функции main() из модуля optimization_bot")
+            optimization_bot.main()
+        else:
+            logger.error("Функция main() не найдена в модуле optimization_bot")
     except Exception as e:
-        logger.error(f"Ошибка при импорте файла optimization_bot.py: {e}")
+        logger.error(f"Ошибка при импорте или запуске файла optimization_bot.py: {e}")
         try:
             # В случае ошибки запускаем как подпроцесс
             logger.info("Запуск optimization_bot.py через subprocess")
