@@ -48,13 +48,21 @@ def patch_anthropic_module():
             
             # Создаем простую обертку для исключения проблемных параметров
             def patched_anthropic_init(self, *args, **kwargs):
-                # Удаляем проблемные параметры
-                if 'proxies' in kwargs:
-                    logger.info("Удален параметр 'proxies' при инициализации Anthropic")
-                    kwargs_clean = kwargs.copy()
-                    del kwargs_clean['proxies']
-                else:
-                    kwargs_clean = kwargs
+                # Список проблемных параметров для удаления
+                problem_params = ['proxies', 'http_client', 'custom_headers', 'base_url']
+                
+                # Создаем копию параметров
+                kwargs_clean = kwargs.copy()
+                
+                # Удаляем все проблемные параметры
+                for param in problem_params:
+                    if param in kwargs_clean:
+                        logger.info(f"Удален параметр '{param}' при инициализации Anthropic")
+                        del kwargs_clean[param]
+                
+                # Оставляем только api_key
+                if 'api_key' in kwargs_clean:
+                    kwargs_clean = {'api_key': kwargs_clean['api_key']}
                 
                 # Вызываем оригинальный метод инициализации
                 return original_init(self, *args, **kwargs_clean)
