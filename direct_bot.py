@@ -42,7 +42,13 @@ class SafeAnthropicClient:
         """Инициализация клиента с минимальными параметрами"""
         import anthropic
         try:
-            self._client = anthropic.Anthropic(api_key=self._api_key)
+            # Используем оригинальный класс Anthropic
+            original_class = getattr(anthropic, '_original_Anthropic', None)
+            if original_class is None:
+                logger.error("Оригинальный класс Anthropic не найден")
+                raise RuntimeError("Оригинальный класс Anthropic не найден")
+                
+            self._client = original_class(api_key=self._api_key)
             logger.info("Клиент Anthropic успешно инициализирован")
         except Exception as e:
             logger.error(f"Ошибка при инициализации клиента Anthropic: {e}")
@@ -51,10 +57,14 @@ class SafeAnthropicClient:
     @property
     def messages(self):
         """Доступ к API сообщений"""
+        if self._client is None:
+            raise RuntimeError("Клиент Anthropic не инициализирован")
         return self._client.messages
     
     def __getattr__(self, name):
         """Проксирование всех остальных атрибутов к базовому клиенту"""
+        if self._client is None:
+            raise RuntimeError("Клиент Anthropic не инициализирован")
         return getattr(self._client, name)
 
 # Функция для патчинга модуля anthropic
@@ -66,9 +76,10 @@ def patch_anthropic_module():
         import anthropic
         logger.info(f"Текущая версия модуля anthropic: {getattr(anthropic, '__version__', 'неизвестна')}")
         
-        # Сохраняем оригинальный класс
+        # Сохраняем оригинальный класс, если еще не сохранен
         if not hasattr(anthropic, '_original_Anthropic'):
             anthropic._original_Anthropic = anthropic.Anthropic
+            logger.info("Сохранен оригинальный класс Anthropic")
         
         # Заменяем класс Anthropic на нашу безопасную версию
         anthropic.Anthropic = SafeAnthropicClient
