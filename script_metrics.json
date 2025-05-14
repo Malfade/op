@@ -1,6 +1,6 @@
 {
-    "total_scripts_generated": 16,
-    "total_errors_found": 74,
+    "total_scripts_generated": 17,
+    "total_errors_found": 76,
     "total_errors_fixed": 0,
     "error_types": {
         "ps_syntax": 17,
@@ -10,8 +10,8 @@
         "?:function\\s+Backup-Settings|# Создание резервной копии": 2,
         "?:before|if": 1,
         "?:function\\s+Backup-Settings|# Создание резервной копии|# Back": 7,
-        "?:Show-Menu|Display": 11,
-        "?:not\\s+exist|exist": 7,
+        "?:Show-Menu|Display": 12,
+        "?:not\\s+exist|exist": 8,
         "?:-ErrorAction SilentlyContinue|Select-Object": 4
     },
     "error_trends": [
@@ -185,6 +185,16 @@
                 "?:Show-Menu|Display": 1,
                 "?:not\\s+exist|exist": 1
             }
+        },
+        {
+            "timestamp": "2025-05-14T16:53:38.021209",
+            "model": "unknown",
+            "errors_found": 2,
+            "errors_fixed": 0,
+            "error_types": {
+                "?:Show-Menu|Display": 1,
+                "?:not\\s+exist|exist": 1
+            }
         }
     ],
     "model_performance": {
@@ -195,11 +205,11 @@
             "average_errors_per_script": 8.0
         },
         "unknown": {
-            "total_scripts": 12,
-            "total_errors": 42,
+            "total_scripts": 13,
+            "total_errors": 44,
             "total_fixed": 0,
-            "average_errors_per_script": 3.5
+            "average_errors_per_script": 3.3846153846153846
         }
     },
-    "last_updated": "2025-05-13T21:15:43.241894"
+    "last_updated": "2025-05-14T16:53:38.021217"
 }

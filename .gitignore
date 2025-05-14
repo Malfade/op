@@ -1,6 +1,5 @@
 # Конфиденциальные данные и ключи API
 .env
-*.env
 !example.env
 secrets.json
 *.pem
