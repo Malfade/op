@@ -14,8 +14,8 @@ import requests
 
 # Настройка логирования
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
@@ -28,315 +28,35 @@ if not api_key:
 else:
     logger.info(f"API ключ Anthropic найден (длина: {len(api_key)} символов)")
 
-# Глобальная переменная для отслеживания состояния патча
-ANTHROPIC_PATCHED = False
-
-# Глобальная переменная для хранения экземпляра клиента
-GLOBAL_ANTHROPIC_CLIENT = None
-
-# Класс для мок-ответа с API, используемый глобально
-class MockResponse:
-    def __init__(self):
-        class Content:
-            def __init__(self):
-                self.text = (
-                    "К сожалению, не удалось подключиться к API. "
-                    "В демонстрационных целях предоставлю скрипт-генератор для оптимизации Windows.\n\n"
-                    "```batch\n"
-                    "@echo off\n"
-                    "echo Generating PowerShell optimizer script...\n\n"
-                    "echo # Windows_Optimizer.ps1 > WindowsOptimizer.ps1\n"
-                    "echo # Script for Windows optimization >> WindowsOptimizer.ps1\n"
-                    "echo. >> WindowsOptimizer.ps1\n"
-                    "echo # Check for administrator rights >> WindowsOptimizer.ps1\n"
-                    "echo if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { >> WindowsOptimizer.ps1\n"
-                    "echo     Write-Warning 'Please run this script as Administrator!' >> WindowsOptimizer.ps1\n"
-                    "echo     break >> WindowsOptimizer.ps1\n"
-                    "echo } >> WindowsOptimizer.ps1\n"
-                    "echo. >> WindowsOptimizer.ps1\n"
-                    "echo # Error handling >> WindowsOptimizer.ps1\n"
-                    "echo try { >> WindowsOptimizer.ps1\n"
-                    "echo     # Clean temporary files >> WindowsOptimizer.ps1\n"
-                    "echo     Write-Host 'Cleaning temporary files...' -ForegroundColor Green >> WindowsOptimizer.ps1\n"
-                    "echo     Remove-Item -Path $env:TEMP\\* -Force -Recurse -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1\n"
-                    "echo     Remove-Item -Path C:\\Windows\\Temp\\* -Force -Recurse -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1\n"
-                    "echo. >> WindowsOptimizer.ps1\n"
-                    "echo     # Performance optimization >> WindowsOptimizer.ps1\n"
-                    "echo     Write-Host 'Optimizing performance...' -ForegroundColor Green >> WindowsOptimizer.ps1\n"
-                    "echo     powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c # High Performance >> WindowsOptimizer.ps1\n"
-                    "echo. >> WindowsOptimizer.ps1\n"
-                    "echo     # Disable unnecessary services >> WindowsOptimizer.ps1\n"
-                    "echo     Write-Host 'Disabling unnecessary services...' -ForegroundColor Green >> WindowsOptimizer.ps1\n"
-                    "echo     Stop-Service -Name DiagTrack -Force -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1\n"
-                    "echo     Set-Service -Name DiagTrack -StartupType Disabled -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1\n"
-                    "echo. >> WindowsOptimizer.ps1\n"
-                    "echo     Write-Host 'Optimization completed!' -ForegroundColor Green >> WindowsOptimizer.ps1\n"
-                    "echo } catch { >> WindowsOptimizer.ps1\n"
-                    "echo     Write-Warning \"An error occurred: $_\" >> WindowsOptimizer.ps1\n"
-                    "echo } >> WindowsOptimizer.ps1\n\n"
-                    "echo Creating optimized batch script...\n"
-                    "echo @echo off > WindowsOptimizer.bat\n"
-                    "echo echo Windows Optimizer Batch Script >> WindowsOptimizer.bat\n"
-                    "echo echo ============================== >> WindowsOptimizer.bat\n"
-                    "echo. >> WindowsOptimizer.bat\n"
-                    "echo :: Check for administrator rights >> WindowsOptimizer.bat\n"
-                    "echo net session ^>nul 2^>^&1 >> WindowsOptimizer.bat\n"
-                    "echo if %%errorLevel%% neq 0 ( >> WindowsOptimizer.bat\n"
-                    "echo     echo Please run this script as Administrator! >> WindowsOptimizer.bat\n"
-                    "echo     pause >> WindowsOptimizer.bat\n"
-                    "echo     exit >> WindowsOptimizer.bat\n"
-                    "echo ) >> WindowsOptimizer.bat\n"
-                    "echo. >> WindowsOptimizer.bat\n"
-                    "echo echo Cleaning temporary files... >> WindowsOptimizer.bat\n"
-                    "echo del /f /s /q %%temp%%\\*.* 2^>nul >> WindowsOptimizer.bat\n"
-                    "echo del /f /s /q C:\\Windows\\Temp\\*.* 2^>nul >> WindowsOptimizer.bat\n"
-                    "echo. >> WindowsOptimizer.bat\n"
-                    "echo echo Optimization completed! >> WindowsOptimizer.bat\n"
-                    "echo pause >> WindowsOptimizer.bat\n\n"
-                    "echo Scripts generated successfully.\n"
-                    "echo To run:\n"
-                    "echo - WindowsOptimizer.bat for batch script\n"
-                    "echo - powershell -ExecutionPolicy Bypass -NoProfile -File \"WindowsOptimizer.ps1\" for PowerShell script\n\n"
-                    "echo Starting Windows optimization script...\n"
-                    "echo ==========================================\n"
-                    "powershell -ExecutionPolicy Bypass -NoProfile -File \"WindowsOptimizer.ps1\"\n"
-                    "echo ==========================================\n"
-                    "echo Optimization script completed.\n"
-                    "pause\n"
-                    "```\n\n"
-                    "Этот скрипт решает проблемы с кодировкой, генерируя корректные PowerShell и Batch скрипты. Просто сохраните его как `generate_script.bat` и запустите."
-                )
-                # Добавляем атрибуты для совместимости с разными версиями API
-                self.type = "text"
-        
-        # Создаем базовую структуру ответа от API
-        self.content = [Content()]
-        self.messages = self
-        self.id = "mock_response_id"
-        self.type = "message"
-        self.role = "assistant"
-        self.model = "claude-mock"
-        self.stop_reason = "mock_stop"
-        self.stop_sequence = None
-        self.usage = {
-            "input_tokens": 0,
-            "output_tokens": 0
-        }
-    
-    def create(self, *args, **kwargs):
-        """Имитирует вызов client.messages.create() в новых версиях API"""
-        logger.info("Вызов mock-метода create()")
-        # Можно обработать kwargs для более точной имитации ответа
-        model = kwargs.get('model', 'claude-mock')
-        logger.info(f"Запрошенная модель: {model}")
-        return self
-
+# Функция для патчинга модуля anthropic
 def patch_anthropic_module():
     """
-    Патчит модуль anthropic, добавляя необходимые методы
+    Патчит модуль anthropic для обеспечения совместимости с API Claude
     """
-    global ANTHROPIC_PATCHED
-    
-    # Если модуль уже патчен, просто возвращаем True
-    if ANTHROPIC_PATCHED:
-        logger.info("Модуль anthropic уже был патчен ранее")
-        return True
-        
     try:
         import anthropic
-        import importlib.util
-        
-        # Проверяем наличие API ключа
-        api_key = os.environ.get('ANTHROPIC_API_KEY', '')
-        if not api_key:
-            logger.warning("API ключ Anthropic не найден в переменных окружения!")
-            logger.warning("Бот будет использовать шаблонные ответы вместо реальных запросов к API")
-        else:
-            logger.info("API ключ Anthropic найден, длина: " + str(len(api_key)))
-        
         logger.info(f"Текущая версия модуля anthropic: {getattr(anthropic, '__version__', 'неизвестна')}")
         
-        # Класс обертки для совместимости с разными версиями Anthropic API
-        class CompatAnthropicWrapper:
-            def __init__(self, *args, **kwargs):
-                """
-                Обертка для инициализации клиента Anthropic с разными версиями API
-                """
-                # Проверяем, есть ли API ключ 
-                self._api_key = kwargs.get('api_key', os.environ.get('ANTHROPIC_API_KEY', ''))
-                if not self._api_key:
-                    logger.error("API ключ Anthropic не найден!")
-                    self._client = None
-                    self._messages = None
-                    return
-                
-                # Сохраняем аргументы для последующей инициализации
-                self._args = args
-                self._kwargs = kwargs
-                
-                # Создаем поле для хранения фактического клиента
-                self._client = None
-                self._messages = None
-                
-                logger.info("Инициализирована обертка для Anthropic API")
-                
-                # Пробуем инициализировать клиент
-                self._try_init_client()
-                
-                # Логируем результат инициализации
-                if self._client is not None:
-                    logger.info("Клиент Anthropic успешно инициализирован")
-                else:
-                    logger.warning("Не удалось инициализировать клиент Anthropic")
-            
-            def _try_init_client(self):
-                """
-                Пытается инициализировать клиент с разными версиями API
-                """
-                try:
-                    # Пробуем инициализировать клиент напрямую
-                    import anthropic
-                    # Сохраняем ссылку на оригинальный класс перед патчем
-                    if hasattr(anthropic, '_original_Anthropic'):
-                        original_class = anthropic._original_Anthropic
-                        self._client = original_class(*self._args, **self._kwargs)
-                        logger.info("Успешно инициализирован клиент Anthropic API с использованием оригинального класса")
-                    else:
-                        # Если original_Anthropic не найден, используем стандартный класс
-                        try:
-                            self._client = anthropic.Anthropic(*self._args, **self._kwargs)
-                            logger.info("Успешно инициализирован стандартный клиент Anthropic API")
-                        except Exception as e:
-                            logger.error(f"Ошибка инициализации стандартного клиента: {e}")
-                            self._client = None
-                except Exception as e:
-                    logger.warning(f"Не удалось инициализировать клиент Anthropic API: {e}")
-                    self._client = None
-            
-            def __getattr__(self, name):
-                """
-                Прокси для методов клиента Anthropic API
-                """
-                # Избегаем рекурсии при запросе стандартных атрибутов
-                if name.startswith('_'):
-                    raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
-                
-                if name == 'messages':
-                    # Для структуры API v0.8+: client.messages.create()
-                    if self._client is None:
-                        logger.warning("Клиент не инициализирован, возвращаем mock для messages")
-                        return MockResponse() 
-                    try:
-                        # Проверяем существование атрибута messages у клиента
-                        messages_attr = getattr(self._client, 'messages', None)
-                        if messages_attr is not None:
-                            logger.info("Доступен атрибут messages у клиента Anthropic")
-                            return messages_attr
-                        else:
-                            logger.warning("У клиента нет атрибута messages, возвращаем mock")
-                            return MockResponse()
-                    except Exception as e:
-                        logger.error(f"Ошибка при доступе к client.messages: {e}")
-                        return MockResponse()
-                
-                if self._client is None:
-                    # Попытка повторной инициализации только один раз
-                    if not hasattr(self, '_init_tried'):
-                        self._init_tried = True
-                        self._try_init_client()
-                
-                if self._client is not None:
-                    try:
-                        return getattr(self._client, name)
-                    except AttributeError:
-                        logger.error(f"Атрибут {name} не найден у клиента")
-                        return MockResponse()
-                
-                # Для нестандартных атрибутов возвращаем MockResponse
-                logger.warning(f"Запрошен отсутствующий атрибут: {name}, возвращаем Mock")
-                return MockResponse()
-            
-            def __call__(self, *args, **kwargs):
-                """
-                Прокси для вызовов клиента Anthropic API
-                """
-                if self._client is None:
-                    # Возвращаем шаблонный ответ только если клиент не инициализирован
-                    logger.warning("Вызов метода у неинициализированного клиента, возвращаем MockResponse")
-                    return MockResponse()
-                
-                # Проверяем, есть ли параметр model в kwargs (для API v0.8+)
-                if 'model' in kwargs:
-                    logger.info(f"Обнаружен вызов API с параметром model={kwargs.get('model')}")
-                    
-                    # Пытаемся обратиться к методу messages.create
-                    try:
-                        if hasattr(self._client, 'messages') and hasattr(self._client.messages, 'create'):
-                            logger.info("Вызываем client.messages.create()")
-                            return self._client.messages.create(*args, **kwargs)
-                        else:
-                            logger.warning("Структура API не содержит messages.create, используем метод completion для старой версии API")
-                            # Пробуем использовать метод completion для старых версий API
-                            if hasattr(self._client, 'completion'):
-                                logger.info("Вызываем client.completion()")
-                                return self._client.completion(*args, **kwargs)
-                            else:
-                                logger.warning("API не поддерживает ни messages.create, ни completion")
-                                return MockResponse()
-                    except Exception as e:
-                        logger.error(f"Ошибка вызова API Anthropic: {e}")
-                        # Возвращаем mock только в случае ошибки
-                        return MockResponse()
-                
-                # Вызов метода оригинального клиента
-                try:
-                    return self._client(*args, **kwargs)
-                except Exception as e:
-                    logger.error(f"Ошибка вызова метода клиента Anthropic API: {e}")
-                    # Возвращаем шаблонный ответ в случае ошибки
-                    return MockResponse()
-                    
-        # Проверяем и заменяем оригинальный класс
+        # Сохраняем оригинальный класс Anthropic
+        original_anthropic = None
         if hasattr(anthropic, 'Anthropic'):
-            # Сохраняем оригинальный класс
-            original_Anthropic = anthropic.Anthropic
-            # Сохраняем ссылку на оригинальный класс для использования в _try_init_client
-            anthropic._original_Anthropic = original_Anthropic
+            original_anthropic = anthropic.Anthropic
             
-            # Заменяем класс Anthropic на нашу обертку
-            anthropic.Anthropic = CompatAnthropicWrapper
+            # Создаем простую обертку для исключения проблемных параметров
+            def patched_anthropic_init(self, *args, **kwargs):
+                # Удаляем проблемные параметры
+                if 'proxies' in kwargs:
+                    del kwargs['proxies']
+                # Вызываем оригинальный конструктор
+                return original_anthropic.__init__(self, *args, **kwargs)
             
-            # Проверяем наличие атрибута "messages" в модуле
-            if not hasattr(anthropic, 'messages'):
-                # Для обратной совместимости
-                logger.info("Добавляем метод messages к модулю anthropic для обратной совместимости")
-                # Но не используем MockResponse здесь, чтобы не блокировать реальные вызовы API
-                class MessagesAttribute:
-                    def create(self, *args, **kwargs):
-                        logger.warning("Вызов anthropic.messages.create() напрямую, рекомендуется использовать client.messages.create()")
-                        try:
-                            # Пытаемся создать клиент и сделать запрос
-                            client = original_Anthropic(api_key=api_key)
-                            if hasattr(client, 'messages') and hasattr(client.messages, 'create'):
-                                return client.messages.create(*args, **kwargs)
-                            else:
-                                logger.error("API не поддерживает структуру messages.create")
-                                return MockResponse()
-                        except Exception as e:
-                            logger.error(f"Ошибка вызова API через messages.create: {e}")
-                            return MockResponse()
-                
-                anthropic.messages = MessagesAttribute()
+            # Патчим только метод __init__, сохраняя весь остальной функционал
+            anthropic.Anthropic.__init__ = patched_anthropic_init
+            logger.info("Метод __init__ класса Anthropic успешно патчен")
             
-            logger.info("Модуль anthropic успешно патчен: класс Anthropic заменен на CompatAnthropicWrapper")
-            ANTHROPIC_PATCHED = True
-            return True
-        else:
-            logger.warning("Модуль anthropic не содержит класса Anthropic, патч не применен")
-            return False
-            
+        return True
     except ImportError:
-        logger.error("Не удалось импортировать модуль anthropic")
+        logger.error("Ошибка импорта модуля anthropic")
         return False
     except Exception as e:
         logger.error(f"Ошибка при патчинге модуля anthropic: {e}")
@@ -344,12 +64,11 @@ def patch_anthropic_module():
 
 def modify_bot_file():
     """
-    Модификация файла бота для использования патченного anthropic
+    Минимальная модификация файла бота для поддержки infinity_polling
     """
     try:
         bot_file_path = "optimization_bot.py"
         
-        # Проверяем, существует ли файл бота
         if not os.path.exists(bot_file_path):
             logger.error(f"Файл бота {bot_file_path} не найден")
             return False
@@ -360,52 +79,14 @@ def modify_bot_file():
         with open(bot_file_path, 'r', encoding='utf-8') as file:
             content = file.read()
         
-        # Модификации для улучшения устойчивости бота
-        # 1. Добавляем обработку ошибок при запуске бота
-        if "bot.infinity_polling(" in content and "except Exception as e:" not in content:
-            # Заменяем стандартный метод запуска на более надежный с обработкой ошибок
-            replacement = """
-        # Добавляем задержку перед запуском для стабилизации соединения
-        logger.info("Ожидание 5 секунд перед запуском infinity_polling...")
-        time.sleep(5)
-        
-        # Запуск бота с использованием infinity_polling (более стабильный метод)
-        try:
-            logger.info("Запуск бота с использованием infinity_polling")
-            bot.infinity_polling(timeout=30, long_polling_timeout=15)
-        except Exception as e:
-            if "409" in str(e):
-                # В случае конфликта сессий делаем более долгую паузу
-                logger.warning(f"Обнаружен конфликт сессий (409): {e}")
-                logger.info("Ожидание 30 секунд для сброса сессий Telegram...")
-                time.sleep(30)
-                logger.info("Повторный запуск бота после сброса сессий")
-                bot.infinity_polling(timeout=60, long_polling_timeout=30)
-            else:
-                logger.error(f"Ошибка при запуске бота: {e}")
-                raise"""
-            
-            # Заменяем строку запуска бота
-            content = content.replace("bot.infinity_polling(", "# bot.infinity_polling(")
-            
-            # Находим позицию для вставки нового кода
-            insert_pos = content.find("if __name__ == \"__main__\":")
-            if insert_pos > 0:
-                # Находим начало функции main()
-                main_pos = content.find("def main():", insert_pos)
-                if main_pos > 0:
-                    # Находим конец функции main()
-                    main_end = content.find("if __name__ == \"__main__\":", main_pos)
-                    if main_end > 0:
-                        # Вставляем наш код перед return или в конец функции
-                        return_pos = content.rfind("return", main_pos, main_end)
-                        if return_pos > 0:
-                            content = content[:return_pos] + replacement + "\n        " + content[return_pos:]
-                        else:
-                            # Если return не найден, добавляем перед концом функции
-                            content = content[:main_end] + replacement + "\n    " + content[main_end:]
-            
-            logger.info("Добавлена обработка ошибок при запуске бота")
+        # Добавляем только обработку ошибок при запуске polling
+        if "bot.infinity_polling(" not in content and "bot.polling(none_stop=True)" in content:
+            # Заменяем обычный polling на infinity_polling с таймаутами
+            content = content.replace(
+                "bot.polling(none_stop=True)", 
+                "bot.infinity_polling(timeout=30, long_polling_timeout=15)"
+            )
+            logger.info("Заменен метод polling на infinity_polling для большей стабильности")
         
         # Сохраняем измененный файл
         with open(bot_file_path, 'w', encoding='utf-8') as file:
@@ -413,142 +94,46 @@ def modify_bot_file():
         
         logger.info(f"Файл бота {bot_file_path} успешно модифицирован")
         return True
-    
     except Exception as e:
         logger.error(f"Ошибка при модификации файла бота: {e}")
         return False
 
 def main():
     """
-    Запуск бота с патчем
+    Основная функция запуска бота
     """
+    # Запускаем бот оптимизации с патчем
     logger.info("Запуск бота оптимизации с патчем")
     
     # Патчим модуль anthropic
-    patch_success = patch_anthropic_module()
-    logger.info(f"Результат патчинга модуля: {'успешно' if patch_success else 'неудачно'}")
+    patch_result = patch_anthropic_module()
+    logger.info(f"Результат патчинга модуля: {'успешно' if patch_result else 'неудачно'}")
     
     # Модифицируем файл бота
-    file_mod_success = modify_bot_file()
-    logger.info(f"Результат модификации файла: {'успешно' if file_mod_success else 'неудачно'}")
+    if os.path.exists("optimization_bot.py"):
+        logger.info("Открываю файл бота optimization_bot.py для модификации")
+        modified = modify_bot_file()
+        logger.info(f"Результат модификации файла: {'успешно' if modified else 'неудачно'}")
+    else:
+        logger.warning("Файл optimization_bot.py не найден")
     
-    # Делаем паузу перед запуском для стабилизации системы
-    logger.info("Ожидание 10 секунд перед запуском бота...")
-    time.sleep(10)
+    # Небольшая пауза перед запуском для стабилизации системы
+    logger.info("Ожидание 3 секунд перед запуском бота...")
+    time.sleep(3)
     
-    # Проверяем наличие активных подключений к Telegram API
-    # и сбрасываем текущее соединение при необходимости
+    # Запускаем файл optimization_bot.py
     try:
-        import requests
-        telegram_token = os.environ.get('TELEGRAM_TOKEN')
-        if telegram_token:
-            # Попытка сбросить вебхуки, если они используются
-            logger.info("Попытка сброса вебхуков Telegram...")
-            requests.get(f'https://api.telegram.org/bot{telegram_token}/deleteWebhook?drop_pending_updates=true')
-            time.sleep(2)
-            # Получаем информацию о боте для проверки соединения
-            response = requests.get(f'https://api.telegram.org/bot{telegram_token}/getMe')
-            if response.status_code == 200:
-                logger.info(f"Соединение с Telegram API установлено. Бот: {response.json().get('result', {}).get('username')}")
-            else:
-                logger.warning(f"Проблема с Telegram API: {response.status_code}, {response.text}")
+        logger.info("Запуск optimization_bot.py")
+        import optimization_bot
+        logger.info("Файл optimization_bot.py успешно импортирован")
     except Exception as e:
-        logger.warning(f"Не удалось проверить соединение с Telegram API: {e}")
-    
-    # Импортируем все необходимые классы перед модификацией OptimizationBot
-    try:
-        # Импортируем все необходимые классы один раз в начале
-        imported_classes = {}
-        
-        # Импортируем сначала необходимые классы
+        logger.error(f"Ошибка при импорте файла optimization_bot.py: {e}")
         try:
-            from script_validator import ScriptValidator
-            imported_classes['ScriptValidator'] = ScriptValidator
-        except ImportError:
-            logger.warning("Не удалось импортировать ScriptValidator")
-        
-        try:
-            from script_metrics import ScriptMetrics
-            imported_classes['ScriptMetrics'] = ScriptMetrics
-        except ImportError:
-            logger.warning("Не удалось импортировать ScriptMetrics")
-        
-        try:
-            from prompt_optimizer import PromptOptimizer
-            imported_classes['PromptOptimizer'] = PromptOptimizer
-        except ImportError:
-            logger.warning("Не удалось импортировать PromptOptimizer")
-        
-        # Импортируем модуль optimization_bot
-        from optimization_bot import OptimizationBot
-        
-        # Переопределяем метод __init__ для использования нашего патча
-        original_init = OptimizationBot.__init__
-        
-        def patched_init(self, api_key, validator=None):
-            """Патченный метод инициализации, который использует нашу обертку Anthropic"""
-            # Инициализируем собственные поля класса
-            self.api_key = api_key
-            
-            # Используем импортированные классы из словаря
-            self.validator = validator or imported_classes.get('ScriptValidator', lambda: None)()
-            self.metrics = imported_classes.get('ScriptMetrics', lambda: None)()
-            
-            # Создаем prompt_optimizer только если есть ScriptMetrics
-            if 'PromptOptimizer' in imported_classes and self.metrics is not None:
-                self.prompt_optimizer = imported_classes['PromptOptimizer'](metrics=self.metrics)
-                self.prompts = self.prompt_optimizer.get_optimized_prompts()
-            else:
-                self.prompt_optimizer = None
-                self.prompts = {}
-            
-            # Инициализация патченного клиента Anthropic
-            logger.info("Инициализация OptimizationBot с патченной версией Anthropic")
-            
-            # Импортируем патченный модуль anthropic и инициализируем клиент
-            import anthropic
-            try:
-                # Создаем клиент Anthropic с помощью патченного конструктора
-                # Вызов конструктора приведет к использованию CompatAnthropicWrapper
-                self.client = anthropic.Anthropic(api_key=api_key)
-                logger.info("Успешно создан клиент Anthropic API")
-            except Exception as e:
-                logger.error(f"Ошибка при создании клиента Anthropic: {e}")
-                # В случае ошибки используем модуль напрямую для вызова API 
-                # через глобальные функции (для обратной совместимости)
-                self.client = anthropic
-                logger.warning("Используем модуль anthropic напрямую из-за ошибки инициализации")
-        
-        # Заменяем метод инициализации
-        OptimizationBot.__init__ = patched_init
-        logger.info("Метод __init__ класса OptimizationBot успешно переопределен")
-        
-        # Запускаем основной скрипт бота
-        logger.info("Непосредственный запуск optimization_bot.py")
-        
-        # Импортируем и запускаем бота
-        from optimization_bot import main as bot_main
-        bot_main()
-    
-    except ImportError as e:
-        logger.error(f"Ошибка импорта: {e}")
-        # В случае сбоя запускаем бот как подпроцесс
-        logger.info("Пробуем запустить бота как подпроцесс")
-        subprocess.run([sys.executable, "optimization_bot.py"])
-    except Exception as e:
-        if "409" in str(e):
-            logger.warning(f"Конфликт сессий Telegram API (409): {e}")
-            logger.info("Ожидание 30 секунд перед повторной попыткой запуска...")
-            time.sleep(30)
-            logger.info("Запуск бота как подпроцесс после ожидания")
+            # В случае ошибки запускаем как подпроцесс
+            logger.info("Запуск optimization_bot.py через subprocess")
             subprocess.run([sys.executable, "optimization_bot.py"])
-        else:
-            logger.error(f"Ошибка при запуске бота: {e}")
-            # В случае сбоя запускаем бот как подпроцесс
-            logger.info("Пробуем запустить бота как подпроцесс")
-            subprocess.run([sys.executable, "optimization_bot.py"])
-    
-    return 0
+        except Exception as sub_e:
+            logger.error(f"Ошибка при запуске subprocess: {sub_e}")
 
 if __name__ == "__main__":
     main() 
