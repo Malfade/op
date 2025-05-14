@@ -211,12 +211,36 @@ def modify_bot_file():
                 
                 new_content = new_content.replace(orig_line, replacement)
             
-            # Патч для polling - добавление clean=True и обработки ошибки 409
-            if "bot.polling(none_stop=True)" in new_content:
-                logger.info("Найден код запуска polling")
+            # Патч для запуска бота - используем infinity_polling вместо polling с параметром clean
+            if "bot.polling(none_stop=True, clean=True)" in new_content or "bot.polling(none_stop=True)" in new_content:
+                logger.info("Найден код запуска бота через polling, заменяем на infinity_polling")
                 
-                # Добавляем обработку ошибки 409 и параметр clean=True
-                polling_patch = """    # Задержка перед запуском для стабилизации соединения
+                # Обновляем код запуска бота на infinity_polling
+                infinity_polling_patch = """    # Задержка перед запуском для стабилизации соединения
+    import time
+    logger.info("Ожидание 5 секунд перед запуском infinity_polling...")
+    time.sleep(5)
+    
+    # Запуск бота с использованием infinity_polling (более стабильный вариант)
+    try:
+        logger.info("Запуск бота с использованием infinity_polling")
+        bot.infinity_polling(timeout=30, long_polling_timeout=15)
+    except Exception as e:
+        if "409" in str(e):
+            # В случае конфликта сессий делаем более долгую паузу
+            logger.warning(f"Обнаружен конфликт сессий (409): {e}")
+            logger.info("Ожидание 30 секунд для сброса сессий Telegram...")
+            time.sleep(30)
+            logger.info("Повторный запуск бота после сброса сессий")
+            bot.infinity_polling(timeout=60, long_polling_timeout=30)
+        else:
+            logger.error(f"Ошибка при запуске бота: {e}")
+            raise"""
+                
+                # Заменяем старый блок на новый
+                # Сначала попробуем заменить версию с clean=True
+                if "bot.polling(none_stop=True, clean=True)" in new_content:
+                    new_content = new_content.replace("""    # Задержка перед запуском для стабилизации соединения
     import time
     logger.info("Ожидание 5 секунд перед запуском polling...")
     time.sleep(5)
@@ -235,9 +259,32 @@ def modify_bot_file():
             bot.polling(none_stop=True, clean=True, timeout=30)
         else:
             logger.error(f"Ошибка при запуске бота: {e}")
-            raise"""
-                
-                new_content = new_content.replace("    bot.polling(none_stop=True)", polling_patch)
+            raise""", infinity_polling_patch)
+                # Затем проверим и заменим версию без clean=True
+                elif "bot.polling(none_stop=True)" in new_content:
+                    new_content = new_content.replace("""    # Задержка перед запуском для стабилизации соединения
+    import time
+    logger.info("Ожидание 5 секунд перед запуском polling...")
+    time.sleep(5)
+    
+    # Запуск бота (без параметра clean, который не поддерживается)
+    try:
+        logger.info("Запуск бота с параметром none_stop=True")
+        bot.polling(none_stop=True)
+    except Exception as e:
+        if "409" in str(e):
+            # В случае конфликта сессий делаем более долгую паузу
+            logger.warning(f"Обнаружен конфликт сессий (409): {e}")
+            logger.info("Ожидание 30 секунд для сброса сессий Telegram...")
+            time.sleep(30)
+            logger.info("Повторный запуск бота после сброса сессий")
+            bot.polling(none_stop=True, timeout=30)
+        else:
+            logger.error(f"Ошибка при запуске бота: {e}")
+            raise""", infinity_polling_patch)
+                # Проверяем также простой вариант без полного блока
+                else:
+                    new_content = new_content.replace("bot.polling(none_stop=True)", "bot.infinity_polling(timeout=30)")
             
             # Сохраняем изменения
             with open(bot_file, "w", encoding="utf-8") as f:
@@ -366,6 +413,11 @@ pause
     # Запускаем основной скрипт бота
     logger.info("Непосредственный запуск optimization_bot.py")
     try:
+        # Проверяем версию telebot для выбора правильного метода запуска
+        import telebot
+        telebot_version = getattr(telebot, "__version__", "unknown")
+        logger.info(f"Версия библиотеки telebot: {telebot_version}")
+        
         # Импортируем и запускаем бота
         from optimization_bot import main as bot_main
         bot_main()

@@ -1804,30 +1804,24 @@ def main():
         total_errors = error_stats["total_errors"]
         logger.info(f"Обнаружено ошибок: {total_errors}")
         
-        # Добавляем блок для сброса webhook API перед запуском
-        def ensure_webhook_deleted():
-            try:
-                # Сбрасываем webhook и активные соединения
-                logger.info("Сброс webhook и активных соединений...")
-                requests.get(f'https://api.telegram.org/bot{bot.token}/deleteWebhook?drop_pending_updates=true')
-                time.sleep(3)  # Небольшая пауза для завершения операции
-                logger.info("Webhook сброшен успешно")
-                return True
-            except Exception as e:
-                logger.warning(f"Ошибка при сбросе webhook: {e}")
-                return False
-        
         # Сбрасываем webhook перед запуском
-        ensure_webhook_deleted()
+        try:
+            # Сбрасываем webhook и активные соединения
+            logger.info("Сброс webhook и активных соединений...")
+            requests.get(f'https://api.telegram.org/bot{bot.token}/deleteWebhook?drop_pending_updates=true')
+            time.sleep(3)  # Небольшая пауза для завершения операции
+            logger.info("Webhook сброшен успешно")
+        except Exception as e:
+            logger.warning(f"Ошибка при сбросе webhook: {e}")
         
         # Добавляем задержку перед запуском для стабилизации соединения
-        logger.info("Ожидание 5 секунд перед запуском polling...")
+        logger.info("Ожидание 5 секунд перед запуском infinity_polling...")
         time.sleep(5)
         
-        # Запуск с clean=True для сброса предыдущих сессий
+        # Запуск бота с использованием infinity_polling (более стабильный метод)
         try:
-            logger.info("Запуск бота с параметром clean=True")
-            bot.polling(none_stop=True, clean=True)
+            logger.info("Запуск бота с использованием infinity_polling")
+            bot.infinity_polling(timeout=30, long_polling_timeout=15)
         except Exception as e:
             if "409" in str(e):
                 # В случае конфликта сессий делаем более долгую паузу
@@ -1835,7 +1829,7 @@ def main():
                 logger.info("Ожидание 30 секунд для сброса сессий Telegram...")
                 time.sleep(30)
                 logger.info("Повторный запуск бота после сброса сессий")
-                bot.polling(none_stop=True, clean=True, timeout=30)
+                bot.infinity_polling(timeout=60, long_polling_timeout=30)
             else:
                 logger.error(f"Ошибка при запуске бота: {e}")
                 raise
