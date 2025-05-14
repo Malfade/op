@@ -1,1 +1,1 @@
-web: python optimization_bot.py
+worker: python optimization_bot.py
