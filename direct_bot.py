@@ -43,68 +43,70 @@ def patch_anthropic_module():
                     def __init__(self):
                         self.text = (
                             "К сожалению, не удалось подключиться к API. "
-                            "В демонстрационных целях предоставлю типовой скрипт оптимизации.\n\n"
-                            "```powershell\n"
-                            "# Windows_Optimizer.ps1\n"
-                            "# Скрипт для базовой оптимизации Windows\n\n"
-                            "# Функция для создания резервных копий\n"
-                            "function Backup-Settings {\n"
-                            "    param (\n"
-                            "        [string]$Name,\n"
-                            "        [string]$Data\n"
-                            "    )\n"
-                            "    \n"
-                            "    $BackupDir = \"$env:USERPROFILE\\WindowsOptimizer_Backups\"\n"
-                            "    if (!(Test-Path $BackupDir)) {\n"
-                            "        New-Item -Path $BackupDir -ItemType Directory -Force | Out-Null\n"
-                            "    }\n"
-                            "    \n"
-                            "    $TimeStamp = Get-Date -Format \"yyyyMMdd_HHmmss\"\n"
-                            "    $BackupFile = \"$BackupDir\\${Name}_$TimeStamp.bak\"\n"
-                            "    \n"
-                            "    $Data | Out-File -FilePath $BackupFile -Encoding utf8 -Force\n"
-                            "    Write-Host \"Создана резервная копия $Name в файле $BackupFile\" -ForegroundColor Cyan\n"
-                            "}\n\n"
-                            "# Проверка прав администратора\n"
-                            "if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {\n"
-                            "    Write-Warning 'Запустите скрипт с правами администратора!'\n"
-                            "    break\n"
-                            "}\n\n"
-                            "# Обработка ошибок\n"
-                            "try {\n"
-                            "    # Очистка временных файлов\n"
-                            "    Write-Host 'Очистка временных файлов...' -ForegroundColor Green\n"
-                            "    Remove-Item -Path $env:TEMP\\* -Force -Recurse -ErrorAction SilentlyContinue\n"
-                            "    Remove-Item -Path C:\\Windows\\Temp\\* -Force -Recurse -ErrorAction SilentlyContinue\n\n"
-                            "    # Оптимизация производительности\n"
-                            "    Write-Host 'Оптимизация производительности...' -ForegroundColor Green\n"
-                            "    powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c # Высокая производительность\n\n"
-                            "    # Отключение ненужных служб\n"
-                            "    Write-Host 'Отключение ненужных служб...' -ForegroundColor Green\n"
-                            "    Stop-Service -Name DiagTrack -Force -ErrorAction SilentlyContinue\n"
-                            "    Set-Service -Name DiagTrack -StartupType Disabled -ErrorAction SilentlyContinue\n\n"
-                            "    Write-Host 'Оптимизация завершена!' -ForegroundColor Green\n"
-                            "} catch {\n"
-                            "    Write-Warning \"Произошла ошибка: $_\"\n"
-                            "}\n"
-                            "```\n\n"
+                            "В демонстрационных целях предоставлю скрипт-генератор для оптимизации Windows.\n\n"
                             "```batch\n"
                             "@echo off\n"
-                            "echo Windows Optimizer Batch Script\n"
-                            "echo ==============================\n\n"
-                            ":: Проверка прав администратора\n"
-                            "net session >nul 2>&1\n"
-                            "if %errorLevel% neq 0 (\n"
-                            "    echo Запустите скрипт с правами администратора!\n"
-                            "    pause\n"
-                            "    exit\n"
-                            ")\n\n"
-                            "echo Очистка временных файлов...\n"
-                            "del /f /s /q %temp%\\*.* 2>nul\n"
-                            "del /f /s /q C:\\Windows\\Temp\\*.* 2>nul\n\n"
-                            "echo Оптимизация завершена!\n"
+                            "echo Generating PowerShell optimizer script...\n\n"
+                            "echo # Windows_Optimizer.ps1 > WindowsOptimizer.ps1\n"
+                            "echo # Script for Windows optimization >> WindowsOptimizer.ps1\n"
+                            "echo. >> WindowsOptimizer.ps1\n"
+                            "echo # Check for administrator rights >> WindowsOptimizer.ps1\n"
+                            "echo if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { >> WindowsOptimizer.ps1\n"
+                            "echo     Write-Warning 'Please run this script as Administrator!' >> WindowsOptimizer.ps1\n"
+                            "echo     break >> WindowsOptimizer.ps1\n"
+                            "echo } >> WindowsOptimizer.ps1\n"
+                            "echo. >> WindowsOptimizer.ps1\n"
+                            "echo # Error handling >> WindowsOptimizer.ps1\n"
+                            "echo try { >> WindowsOptimizer.ps1\n"
+                            "echo     # Clean temporary files >> WindowsOptimizer.ps1\n"
+                            "echo     Write-Host 'Cleaning temporary files...' -ForegroundColor Green >> WindowsOptimizer.ps1\n"
+                            "echo     Remove-Item -Path $env:TEMP\\* -Force -Recurse -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1\n"
+                            "echo     Remove-Item -Path C:\\Windows\\Temp\\* -Force -Recurse -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1\n"
+                            "echo. >> WindowsOptimizer.ps1\n"
+                            "echo     # Performance optimization >> WindowsOptimizer.ps1\n"
+                            "echo     Write-Host 'Optimizing performance...' -ForegroundColor Green >> WindowsOptimizer.ps1\n"
+                            "echo     powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c # High Performance >> WindowsOptimizer.ps1\n"
+                            "echo. >> WindowsOptimizer.ps1\n"
+                            "echo     # Disable unnecessary services >> WindowsOptimizer.ps1\n"
+                            "echo     Write-Host 'Disabling unnecessary services...' -ForegroundColor Green >> WindowsOptimizer.ps1\n"
+                            "echo     Stop-Service -Name DiagTrack -Force -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1\n"
+                            "echo     Set-Service -Name DiagTrack -StartupType Disabled -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1\n"
+                            "echo. >> WindowsOptimizer.ps1\n"
+                            "echo     Write-Host 'Optimization completed!' -ForegroundColor Green >> WindowsOptimizer.ps1\n"
+                            "echo } catch { >> WindowsOptimizer.ps1\n"
+                            "echo     Write-Warning \"An error occurred: $_\" >> WindowsOptimizer.ps1\n"
+                            "echo } >> WindowsOptimizer.ps1\n\n"
+                            "echo Creating optimized batch script...\n"
+                            "echo @echo off > WindowsOptimizer.bat\n"
+                            "echo echo Windows Optimizer Batch Script >> WindowsOptimizer.bat\n"
+                            "echo echo ============================== >> WindowsOptimizer.bat\n"
+                            "echo. >> WindowsOptimizer.bat\n"
+                            "echo :: Check for administrator rights >> WindowsOptimizer.bat\n"
+                            "echo net session ^>nul 2^>^&1 >> WindowsOptimizer.bat\n"
+                            "echo if %%errorLevel%% neq 0 ( >> WindowsOptimizer.bat\n"
+                            "echo     echo Please run this script as Administrator! >> WindowsOptimizer.bat\n"
+                            "echo     pause >> WindowsOptimizer.bat\n"
+                            "echo     exit >> WindowsOptimizer.bat\n"
+                            "echo ) >> WindowsOptimizer.bat\n"
+                            "echo. >> WindowsOptimizer.bat\n"
+                            "echo echo Cleaning temporary files... >> WindowsOptimizer.bat\n"
+                            "echo del /f /s /q %%temp%%\\*.* 2^>nul >> WindowsOptimizer.bat\n"
+                            "echo del /f /s /q C:\\Windows\\Temp\\*.* 2^>nul >> WindowsOptimizer.bat\n"
+                            "echo. >> WindowsOptimizer.bat\n"
+                            "echo echo Optimization completed! >> WindowsOptimizer.bat\n"
+                            "echo pause >> WindowsOptimizer.bat\n\n"
+                            "echo Scripts generated successfully.\n"
+                            "echo To run:\n"
+                            "echo - WindowsOptimizer.bat for batch script\n"
+                            "echo - powershell -ExecutionPolicy Bypass -NoProfile -File \"WindowsOptimizer.ps1\" for PowerShell script\n\n"
+                            "echo Starting Windows optimization script...\n"
+                            "echo ==========================================\n"
+                            "powershell -ExecutionPolicy Bypass -NoProfile -File \"WindowsOptimizer.ps1\"\n"
+                            "echo ==========================================\n"
+                            "echo Optimization script completed.\n"
                             "pause\n"
-                            "```"
+                            "```\n\n"
+                            "Этот скрипт решает проблемы с кодировкой, генерируя корректные PowerShell и Batch скрипты. Просто сохраните его как `generate_script.bat` и запустите."
                         )
                 
                 self.content = [Content()]
@@ -237,77 +239,74 @@ def main():
     logger.info(f"Результат модификации файла: {'успешно' if file_mod_success else 'неудачно'}")
     
     # Добавляем шаблонные скрипты
-    template_scripts = """```powershell
-# Windows_Optimizer.ps1
-# Скрипт для базовой оптимизации Windows
+    template_scripts = """```batch
+@echo off
+echo Generating PowerShell optimizer script...
 
-# Функция для создания резервных копий
-function Backup-Settings {
-    param (
-        [string]$Name,
-        [string]$Data
-    )
-    
-    $BackupDir = "$env:USERPROFILE\\WindowsOptimizer_Backups"
-    if (!(Test-Path $BackupDir)) {
-        New-Item -Path $BackupDir -ItemType Directory -Force | Out-Null
-    }
-    
-    $TimeStamp = Get-Date -Format "yyyyMMdd_HHmmss"
-    $BackupFile = "$BackupDir\\${Name}_$TimeStamp.bak"
-    
-    $Data | Out-File -FilePath $BackupFile -Encoding utf8 -Force
-    Write-Host "Создана резервная копия $Name в файле $BackupFile" -ForegroundColor Cyan
-}
+echo # Windows_Optimizer.ps1 > WindowsOptimizer.ps1
+echo # Script for Windows optimization >> WindowsOptimizer.ps1
+echo. >> WindowsOptimizer.ps1
+echo # Check for administrator rights >> WindowsOptimizer.ps1
+echo if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { >> WindowsOptimizer.ps1
+echo     Write-Warning 'Please run this script as Administrator!' >> WindowsOptimizer.ps1
+echo     break >> WindowsOptimizer.ps1
+echo } >> WindowsOptimizer.ps1
+echo. >> WindowsOptimizer.ps1
+echo # Error handling >> WindowsOptimizer.ps1
+echo try { >> WindowsOptimizer.ps1
+echo     # Clean temporary files >> WindowsOptimizer.ps1
+echo     Write-Host 'Cleaning temporary files...' -ForegroundColor Green >> WindowsOptimizer.ps1
+echo     Remove-Item -Path $env:TEMP\\* -Force -Recurse -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1
+echo     Remove-Item -Path C:\\Windows\\Temp\\* -Force -Recurse -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1
+echo. >> WindowsOptimizer.ps1
+echo     # Performance optimization >> WindowsOptimizer.ps1
+echo     Write-Host 'Optimizing performance...' -ForegroundColor Green >> WindowsOptimizer.ps1
+echo     powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c # High Performance >> WindowsOptimizer.ps1
+echo. >> WindowsOptimizer.ps1
+echo     # Disable unnecessary services >> WindowsOptimizer.ps1
+echo     Write-Host 'Disabling unnecessary services...' -ForegroundColor Green >> WindowsOptimizer.ps1
+echo     Stop-Service -Name DiagTrack -Force -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1
+echo     Set-Service -Name DiagTrack -StartupType Disabled -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1
+echo. >> WindowsOptimizer.ps1
+echo     Write-Host 'Optimization completed!' -ForegroundColor Green >> WindowsOptimizer.ps1
+echo } catch { >> WindowsOptimizer.ps1
+echo     Write-Warning "An error occurred: $_" >> WindowsOptimizer.ps1
+echo } >> WindowsOptimizer.ps1
 
-# Проверка прав администратора
-if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Warning 'Запустите скрипт с правами администратора!'
-    break
-}
+echo Creating optimized batch script...
+echo @echo off > WindowsOptimizer.bat
+echo echo Windows Optimizer Batch Script >> WindowsOptimizer.bat
+echo echo ============================== >> WindowsOptimizer.bat
+echo. >> WindowsOptimizer.bat
+echo :: Check for administrator rights >> WindowsOptimizer.bat
+echo net session ^>nul 2^>^&1 >> WindowsOptimizer.bat
+echo if %%errorLevel%% neq 0 ( >> WindowsOptimizer.bat
+echo     echo Please run this script as Administrator! >> WindowsOptimizer.bat
+echo     pause >> WindowsOptimizer.bat
+echo     exit >> WindowsOptimizer.bat
+echo ) >> WindowsOptimizer.bat
+echo. >> WindowsOptimizer.bat
+echo echo Cleaning temporary files... >> WindowsOptimizer.bat
+echo del /f /s /q %%temp%%\\*.* 2^>nul >> WindowsOptimizer.bat
+echo del /f /s /q C:\\Windows\\Temp\\*.* 2^>nul >> WindowsOptimizer.bat
+echo. >> WindowsOptimizer.bat
+echo echo Optimization completed! >> WindowsOptimizer.bat
+echo pause >> WindowsOptimizer.bat
 
-# Обработка ошибок
-try {
-    # Очистка временных файлов
-    Write-Host 'Очистка временных файлов...' -ForegroundColor Green
-    Remove-Item -Path $env:TEMP\\* -Force -Recurse -ErrorAction SilentlyContinue
-    Remove-Item -Path C:\\Windows\\Temp\\* -Force -Recurse -ErrorAction SilentlyContinue
+echo Scripts generated successfully.
+echo To run:
+echo - WindowsOptimizer.bat for batch script
+echo - powershell -ExecutionPolicy Bypass -NoProfile -File "WindowsOptimizer.ps1" for PowerShell script
 
-    # Оптимизация производительности
-    Write-Host 'Оптимизация производительности...' -ForegroundColor Green
-    powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c # Высокая производительность
-
-    # Отключение ненужных служб
-    Write-Host 'Отключение ненужных служб...' -ForegroundColor Green
-    Stop-Service -Name DiagTrack -Force -ErrorAction SilentlyContinue
-    Set-Service -Name DiagTrack -StartupType Disabled -ErrorAction SilentlyContinue
-
-    Write-Host 'Оптимизация завершена!' -ForegroundColor Green
-} catch {
-    Write-Warning "Произошла ошибка: $_"
-}
+echo Starting Windows optimization script...
+echo ==========================================
+powershell -ExecutionPolicy Bypass -NoProfile -File "WindowsOptimizer.ps1"
+echo ==========================================
+echo Optimization script completed.
+pause
 ```
 
-```batch
-@echo off
-echo Windows Optimizer Batch Script
-echo ==============================
-
-:: Проверка прав администратора
-net session >nul 2>&1
-if %errorLevel% neq 0 (
-    echo Запустите скрипт с правами администратора!
-    pause
-    exit
-)
-
-echo Очистка временных файлов...
-del /f /s /q %temp%\*.* 2>nul
-del /f /s /q C:\Windows\Temp\*.* 2>nul
-
-echo Оптимизация завершена!
-pause
-```"""
+Этот скрипт решает проблемы с кодировкой, генерируя корректные PowerShell и Batch скрипты. Просто сохраните его как `generate_script.bat` и запустите."""
     
     # Добавляем глобальную переменную с шаблонными скриптами
     globals()['template_scripts'] = template_scripts
