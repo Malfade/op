@@ -10,6 +10,7 @@ import os
 import subprocess
 import logging
 import time
+import requests
 
 # Настройка логирования
 logging.basicConfig(
@@ -18,283 +19,259 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Класс для мок-ответа с API, используемый глобально
+class MockResponse:
+    def __init__(self):
+        class Content:
+            def __init__(self):
+                self.text = (
+                    "К сожалению, не удалось подключиться к API. "
+                    "В демонстрационных целях предоставлю скрипт-генератор для оптимизации Windows.\n\n"
+                    "```batch\n"
+                    "@echo off\n"
+                    "echo Generating PowerShell optimizer script...\n\n"
+                    "echo # Windows_Optimizer.ps1 > WindowsOptimizer.ps1\n"
+                    "echo # Script for Windows optimization >> WindowsOptimizer.ps1\n"
+                    "echo. >> WindowsOptimizer.ps1\n"
+                    "echo # Check for administrator rights >> WindowsOptimizer.ps1\n"
+                    "echo if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { >> WindowsOptimizer.ps1\n"
+                    "echo     Write-Warning 'Please run this script as Administrator!' >> WindowsOptimizer.ps1\n"
+                    "echo     break >> WindowsOptimizer.ps1\n"
+                    "echo } >> WindowsOptimizer.ps1\n"
+                    "echo. >> WindowsOptimizer.ps1\n"
+                    "echo # Error handling >> WindowsOptimizer.ps1\n"
+                    "echo try { >> WindowsOptimizer.ps1\n"
+                    "echo     # Clean temporary files >> WindowsOptimizer.ps1\n"
+                    "echo     Write-Host 'Cleaning temporary files...' -ForegroundColor Green >> WindowsOptimizer.ps1\n"
+                    "echo     Remove-Item -Path $env:TEMP\\* -Force -Recurse -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1\n"
+                    "echo     Remove-Item -Path C:\\Windows\\Temp\\* -Force -Recurse -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1\n"
+                    "echo. >> WindowsOptimizer.ps1\n"
+                    "echo     # Performance optimization >> WindowsOptimizer.ps1\n"
+                    "echo     Write-Host 'Optimizing performance...' -ForegroundColor Green >> WindowsOptimizer.ps1\n"
+                    "echo     powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c # High Performance >> WindowsOptimizer.ps1\n"
+                    "echo. >> WindowsOptimizer.ps1\n"
+                    "echo     # Disable unnecessary services >> WindowsOptimizer.ps1\n"
+                    "echo     Write-Host 'Disabling unnecessary services...' -ForegroundColor Green >> WindowsOptimizer.ps1\n"
+                    "echo     Stop-Service -Name DiagTrack -Force -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1\n"
+                    "echo     Set-Service -Name DiagTrack -StartupType Disabled -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1\n"
+                    "echo. >> WindowsOptimizer.ps1\n"
+                    "echo     Write-Host 'Optimization completed!' -ForegroundColor Green >> WindowsOptimizer.ps1\n"
+                    "echo } catch { >> WindowsOptimizer.ps1\n"
+                    "echo     Write-Warning \"An error occurred: $_\" >> WindowsOptimizer.ps1\n"
+                    "echo } >> WindowsOptimizer.ps1\n\n"
+                    "echo Creating optimized batch script...\n"
+                    "echo @echo off > WindowsOptimizer.bat\n"
+                    "echo echo Windows Optimizer Batch Script >> WindowsOptimizer.bat\n"
+                    "echo echo ============================== >> WindowsOptimizer.bat\n"
+                    "echo. >> WindowsOptimizer.bat\n"
+                    "echo :: Check for administrator rights >> WindowsOptimizer.bat\n"
+                    "echo net session ^>nul 2^>^&1 >> WindowsOptimizer.bat\n"
+                    "echo if %%errorLevel%% neq 0 ( >> WindowsOptimizer.bat\n"
+                    "echo     echo Please run this script as Administrator! >> WindowsOptimizer.bat\n"
+                    "echo     pause >> WindowsOptimizer.bat\n"
+                    "echo     exit >> WindowsOptimizer.bat\n"
+                    "echo ) >> WindowsOptimizer.bat\n"
+                    "echo. >> WindowsOptimizer.bat\n"
+                    "echo echo Cleaning temporary files... >> WindowsOptimizer.bat\n"
+                    "echo del /f /s /q %%temp%%\\*.* 2^>nul >> WindowsOptimizer.bat\n"
+                    "echo del /f /s /q C:\\Windows\\Temp\\*.* 2^>nul >> WindowsOptimizer.bat\n"
+                    "echo. >> WindowsOptimizer.bat\n"
+                    "echo echo Optimization completed! >> WindowsOptimizer.bat\n"
+                    "echo pause >> WindowsOptimizer.bat\n\n"
+                    "echo Scripts generated successfully.\n"
+                    "echo To run:\n"
+                    "echo - WindowsOptimizer.bat for batch script\n"
+                    "echo - powershell -ExecutionPolicy Bypass -NoProfile -File \"WindowsOptimizer.ps1\" for PowerShell script\n\n"
+                    "echo Starting Windows optimization script...\n"
+                    "echo ==========================================\n"
+                    "powershell -ExecutionPolicy Bypass -NoProfile -File \"WindowsOptimizer.ps1\"\n"
+                    "echo ==========================================\n"
+                    "echo Optimization script completed.\n"
+                    "pause\n"
+                    "```\n\n"
+                    "Этот скрипт решает проблемы с кодировкой, генерируя корректные PowerShell и Batch скрипты. Просто сохраните его как `generate_script.bat` и запустите."
+                )
+        
+        self.content = [Content()]
+
 def patch_anthropic_module():
     """
-    Патч библиотеки Anthropic напрямую
+    Патчит модуль anthropic, добавляя необходимые методы
     """
-    logger.info("Применение патча к библиотеке Anthropic")
-    
     try:
-        # Импортируем модуль anthropic
         import anthropic
+        import importlib.util
         
-        # Получаем версию библиотеки
-        version = getattr(anthropic, "__version__", "unknown")
-        logger.info(f"Версия библиотеки anthropic: {version}")
+        logger.info(f"Текущая версия модуля anthropic: {getattr(anthropic, '__version__', 'неизвестна')}")
         
-        # Добавляем атрибут для совместимости
-        if not hasattr(anthropic, 'api_key'):
-            anthropic.api_key = None
-            logger.info("Добавлен атрибут api_key к модулю anthropic")
-        
-        # Класс для мок-ответа с API
-        class MockResponse:
-            def __init__(self):
-                class Content:
-                    def __init__(self):
-                        self.text = (
-                            "К сожалению, не удалось подключиться к API. "
-                            "В демонстрационных целях предоставлю скрипт-генератор для оптимизации Windows.\n\n"
-                            "```batch\n"
-                            "@echo off\n"
-                            "echo Generating PowerShell optimizer script...\n\n"
-                            "echo # Windows_Optimizer.ps1 > WindowsOptimizer.ps1\n"
-                            "echo # Script for Windows optimization >> WindowsOptimizer.ps1\n"
-                            "echo. >> WindowsOptimizer.ps1\n"
-                            "echo # Check for administrator rights >> WindowsOptimizer.ps1\n"
-                            "echo if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { >> WindowsOptimizer.ps1\n"
-                            "echo     Write-Warning 'Please run this script as Administrator!' >> WindowsOptimizer.ps1\n"
-                            "echo     break >> WindowsOptimizer.ps1\n"
-                            "echo } >> WindowsOptimizer.ps1\n"
-                            "echo. >> WindowsOptimizer.ps1\n"
-                            "echo # Error handling >> WindowsOptimizer.ps1\n"
-                            "echo try { >> WindowsOptimizer.ps1\n"
-                            "echo     # Clean temporary files >> WindowsOptimizer.ps1\n"
-                            "echo     Write-Host 'Cleaning temporary files...' -ForegroundColor Green >> WindowsOptimizer.ps1\n"
-                            "echo     Remove-Item -Path $env:TEMP\\* -Force -Recurse -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1\n"
-                            "echo     Remove-Item -Path C:\\Windows\\Temp\\* -Force -Recurse -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1\n"
-                            "echo. >> WindowsOptimizer.ps1\n"
-                            "echo     # Performance optimization >> WindowsOptimizer.ps1\n"
-                            "echo     Write-Host 'Optimizing performance...' -ForegroundColor Green >> WindowsOptimizer.ps1\n"
-                            "echo     powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c # High Performance >> WindowsOptimizer.ps1\n"
-                            "echo. >> WindowsOptimizer.ps1\n"
-                            "echo     # Disable unnecessary services >> WindowsOptimizer.ps1\n"
-                            "echo     Write-Host 'Disabling unnecessary services...' -ForegroundColor Green >> WindowsOptimizer.ps1\n"
-                            "echo     Stop-Service -Name DiagTrack -Force -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1\n"
-                            "echo     Set-Service -Name DiagTrack -StartupType Disabled -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1\n"
-                            "echo. >> WindowsOptimizer.ps1\n"
-                            "echo     Write-Host 'Optimization completed!' -ForegroundColor Green >> WindowsOptimizer.ps1\n"
-                            "echo } catch { >> WindowsOptimizer.ps1\n"
-                            "echo     Write-Warning \"An error occurred: $_\" >> WindowsOptimizer.ps1\n"
-                            "echo } >> WindowsOptimizer.ps1\n\n"
-                            "echo Creating optimized batch script...\n"
-                            "echo @echo off > WindowsOptimizer.bat\n"
-                            "echo echo Windows Optimizer Batch Script >> WindowsOptimizer.bat\n"
-                            "echo echo ============================== >> WindowsOptimizer.bat\n"
-                            "echo. >> WindowsOptimizer.bat\n"
-                            "echo :: Check for administrator rights >> WindowsOptimizer.bat\n"
-                            "echo net session ^>nul 2^>^&1 >> WindowsOptimizer.bat\n"
-                            "echo if %%errorLevel%% neq 0 ( >> WindowsOptimizer.bat\n"
-                            "echo     echo Please run this script as Administrator! >> WindowsOptimizer.bat\n"
-                            "echo     pause >> WindowsOptimizer.bat\n"
-                            "echo     exit >> WindowsOptimizer.bat\n"
-                            "echo ) >> WindowsOptimizer.bat\n"
-                            "echo. >> WindowsOptimizer.bat\n"
-                            "echo echo Cleaning temporary files... >> WindowsOptimizer.bat\n"
-                            "echo del /f /s /q %%temp%%\\*.* 2^>nul >> WindowsOptimizer.bat\n"
-                            "echo del /f /s /q C:\\Windows\\Temp\\*.* 2^>nul >> WindowsOptimizer.bat\n"
-                            "echo. >> WindowsOptimizer.bat\n"
-                            "echo echo Optimization completed! >> WindowsOptimizer.bat\n"
-                            "echo pause >> WindowsOptimizer.bat\n\n"
-                            "echo Scripts generated successfully.\n"
-                            "echo To run:\n"
-                            "echo - WindowsOptimizer.bat for batch script\n"
-                            "echo - powershell -ExecutionPolicy Bypass -NoProfile -File \"WindowsOptimizer.ps1\" for PowerShell script\n\n"
-                            "echo Starting Windows optimization script...\n"
-                            "echo ==========================================\n"
-                            "powershell -ExecutionPolicy Bypass -NoProfile -File \"WindowsOptimizer.ps1\"\n"
-                            "echo ==========================================\n"
-                            "echo Optimization script completed.\n"
-                            "pause\n"
-                            "```\n\n"
-                            "Этот скрипт решает проблемы с кодировкой, генерируя корректные PowerShell и Batch скрипты. Просто сохраните его как `generate_script.bat` и запустите."
-                        )
-                
-                self.content = [Content()]
-                
-        # Заглушка для API
-        class MessagesAPI:
-            def create(self, **kwargs):
-                # Используем модельный ответ
-                logger.error("Anthropic API недоступен - возвращаю тестовый ответ")
-                return MockResponse()
-        
-        # Создаем совместимый класс-обертку
+        # Класс обертки для совместимости с разными версиями Anthropic API
         class CompatAnthropicWrapper:
-            def __init__(self, api_key=None, **_kwargs):
-                self.api_key = api_key
-                anthropic.api_key = api_key
-                # Добавляем messages к экземпляру
-                self._messages = MessagesAPI()
+            def __init__(self, *args, **kwargs):
+                """
+                Обертка для инициализации клиента Anthropic с разными версиями API
+                """
+                self._api_key = kwargs.get('api_key', os.environ.get('ANTHROPIC_API_KEY', ''))
+                
+                # Сохраняем аргументы для последующей инициализации
+                self._args = args
+                self._kwargs = kwargs
+                
+                # Создаем поле для хранения фактического клиента
+                self._client = None
+                self._messages = None
+                
+                logger.info("Инициализирована обертка для Anthropic API")
+                
+                # Пробуем инициализировать клиент
+                self._try_init_client()
             
-            @property
-            def messages(self):
-                return self._messages
+            def _try_init_client(self):
+                """
+                Пытается инициализировать клиент с разными версиями API
+                """
+                try:
+                    # Пробуем инициализировать клиент напрямую
+                    import anthropic
+                    original_Anthropic = anthropic.Anthropic
+                    self._client = original_Anthropic(*self._args, **self._kwargs)
+                    logger.info("Успешно инициализирован клиент Anthropic API")
+                except Exception as e:
+                    logger.warning(f"Не удалось инициализировать клиент Anthropic API: {e}")
+                    self._client = None
+            
+            def __getattr__(self, name):
+                """
+                Прокси для методов клиента Anthropic API
+                """
+                if name == 'messages':
+                    if self._messages is None:
+                        self._messages = MockResponse()
+                    return self._messages
+                
+                if self._client is None:
+                    # Попытка повторной инициализации
+                    self._try_init_client()
+                
+                if self._client is not None:
+                    return getattr(self._client, name)
+                
+                # Возвращаем самого себя для цепочки вызовов
+                logger.warning(f"Запрошен отсутствующий атрибут: {name}, возвращаем Mock")
+                return self
+            
+            def __call__(self, *args, **kwargs):
+                """
+                Прокси для вызовов клиента Anthropic API
+                """
+                if self._client is None:
+                    # Возвращаем шаблонный ответ
+                    return MockResponse()
+                
+                # Вызов метода оригинального клиента
+                try:
+                    return self._client(*args, **kwargs)
+                except Exception as e:
+                    logger.error(f"Ошибка вызова метода клиента Anthropic API: {e}")
+                    # Возвращаем шаблонный ответ в случае ошибки
+                    return MockResponse()
         
-        # Добавляем атрибут messages прямо в модуль
-        anthropic.messages = MessagesAPI()
-        
-        # Сохраняем оригинальный класс Anthropic, если он существует
-        original_anthropic = None
+        # Проверяем и заменяем оригинальный класс
         if hasattr(anthropic, 'Anthropic'):
-            original_anthropic = anthropic.Anthropic
+            # Сохраняем оригинальный класс
+            original_Anthropic = anthropic.Anthropic
             
-        # Заменяем Anthropic в модуле
-        anthropic.Anthropic = CompatAnthropicWrapper
-        logger.info("Anthropic успешно заменен на совместимую версию")
-        
-        return True
+            # Заменяем класс Anthropic на нашу обертку
+            anthropic.Anthropic = CompatAnthropicWrapper
+            
+            # Проверяем, есть ли у модуля атрибут "messages"
+            if not hasattr(anthropic, 'messages'):
+                # Добавляем метод "messages" к модулю
+                anthropic.messages = MockResponse()
+            
+            logger.info("Модуль anthropic успешно патчен: класс Anthropic заменен на CompatAnthropicWrapper")
+            return True
+        else:
+            logger.warning("Модуль anthropic не содержит класса Anthropic, патч не применен")
+            return False
+            
+    except ImportError:
+        logger.error("Не удалось импортировать модуль anthropic")
+        return False
     except Exception as e:
         logger.error(f"Ошибка при патчинге модуля anthropic: {e}")
         return False
 
 def modify_bot_file():
     """
-    Изменение файла бота для использования патча
+    Модификация файла бота для использования патченного anthropic
     """
-    bot_file = "optimization_bot.py"
-    logger.info(f"Модификация файла {bot_file}")
-    
     try:
-        # Проверяем существование файла
-        if not os.path.exists(bot_file):
-            logger.error(f"Файл {bot_file} не найден")
+        bot_file_path = "optimization_bot.py"
+        
+        # Проверяем, существует ли файл бота
+        if not os.path.exists(bot_file_path):
+            logger.error(f"Файл бота {bot_file_path} не найден")
             return False
         
-        # Читаем содержимое файла
-        with open(bot_file, "r", encoding="utf-8") as f:
-            content = f.read()
+        logger.info(f"Открываю файл бота {bot_file_path} для модификации")
         
-        # Находим строки, которые нужно заменить
-        if "self.client = anthropic.Anthropic(api_key=api_key)" in content:
-            logger.info("Найден код инициализации клиента Anthropic")
-            
-            # Заменяем инициализацию клиента на безопасную версию
-            new_content = content.replace(
-                "self.client = anthropic.Anthropic(api_key=api_key)",
-                """# Патч для совместимости с разными версиями Anthropic
+        # Чтение содержимого файла
+        with open(bot_file_path, 'r', encoding='utf-8') as file:
+            content = file.read()
+        
+        # Модификации для улучшения устойчивости бота
+        # 1. Добавляем обработку ошибок при запуске бота
+        if "bot.infinity_polling(" in content and "except Exception as e:" not in content:
+            # Заменяем стандартный метод запуска на более надежный с обработкой ошибок
+            replacement = """
+        # Добавляем задержку перед запуском для стабилизации соединения
+        logger.info("Ожидание 5 секунд перед запуском infinity_polling...")
+        time.sleep(5)
+        
+        # Запуск бота с использованием infinity_polling (более стабильный метод)
         try:
-            # Устанавливаем API-ключ во всех возможных местах
-            anthropic.api_key = api_key
-            # Пробуем использовать патченную версию
-            self.client = anthropic.Anthropic(api_key=api_key)
-            logger.info("Используется патченная версия Anthropic")
+            logger.info("Запуск бота с использованием infinity_polling")
+            bot.infinity_polling(timeout=30, long_polling_timeout=15)
         except Exception as e:
-            # В случае ошибки используем прямое присваивание
-            self.client = anthropic  # Прямое использование модуля
-            logger.warning(f"Используется fallback инициализация Anthropic: {e}")"""
-            )
+            if "409" in str(e):
+                # В случае конфликта сессий делаем более долгую паузу
+                logger.warning(f"Обнаружен конфликт сессий (409): {e}")
+                logger.info("Ожидание 30 секунд для сброса сессий Telegram...")
+                time.sleep(30)
+                logger.info("Повторный запуск бота после сброса сессий")
+                bot.infinity_polling(timeout=60, long_polling_timeout=30)
+            else:
+                logger.error(f"Ошибка при запуске бота: {e}")
+                raise"""
             
-            # Дополнительно заменяем код обработки ответа от API, если старая версия не работает
-            if "response_text = response.content[0].text" in new_content:
-                logger.info("Найден код обработки ответа API")
-                
-                # Используем точное совпадение строки с отступами для корректной замены
-                orig_line = "                response_text = response.content[0].text"
-                replacement = """                try:
-                    # Пробуем получить текст из ответа в стандартном формате
-                    response_text = response.content[0].text
-                except (AttributeError, IndexError, TypeError):
-                    # Если не получается, проверяем старый формат API
-                    if hasattr(response, 'completion'):
-                        response_text = response.completion
-                    # Если и это не работает, используем прямой доступ
-                    elif isinstance(response, str):
-                        response_text = response
-                    else:
-                        # В крайнем случае используем str(response)
-                        response_text = str(response)
-                        if len(response_text) < 100:
-                            # Если ответ слишком короткий, вероятно ошибка - используем запасной шаблон
-                            logger.warning(f"Получен слишком короткий ответ: {response_text}")
-                            response_text = "Не удалось получить корректный ответ от API.\\n\\n" + template_scripts"""
-                
-                new_content = new_content.replace(orig_line, replacement)
+            # Заменяем строку запуска бота
+            content = content.replace("bot.infinity_polling(", "# bot.infinity_polling(")
             
-            # Патч для запуска бота - используем infinity_polling вместо polling с параметром clean
-            if "bot.polling(none_stop=True, clean=True)" in new_content or "bot.polling(none_stop=True)" in new_content:
-                logger.info("Найден код запуска бота через polling, заменяем на infinity_polling")
-                
-                # Обновляем код запуска бота на infinity_polling
-                infinity_polling_patch = """    # Задержка перед запуском для стабилизации соединения
-    import time
-    logger.info("Ожидание 5 секунд перед запуском infinity_polling...")
-    time.sleep(5)
-    
-    # Запуск бота с использованием infinity_polling (более стабильный вариант)
-    try:
-        logger.info("Запуск бота с использованием infinity_polling")
-        bot.infinity_polling(timeout=30, long_polling_timeout=15)
-    except Exception as e:
-        if "409" in str(e):
-            # В случае конфликта сессий делаем более долгую паузу
-            logger.warning(f"Обнаружен конфликт сессий (409): {e}")
-            logger.info("Ожидание 30 секунд для сброса сессий Telegram...")
-            time.sleep(30)
-            logger.info("Повторный запуск бота после сброса сессий")
-            bot.infinity_polling(timeout=60, long_polling_timeout=30)
-        else:
-            logger.error(f"Ошибка при запуске бота: {e}")
-            raise"""
-                
-                # Заменяем старый блок на новый
-                # Сначала попробуем заменить версию с clean=True
-                if "bot.polling(none_stop=True, clean=True)" in new_content:
-                    new_content = new_content.replace("""    # Задержка перед запуском для стабилизации соединения
-    import time
-    logger.info("Ожидание 5 секунд перед запуском polling...")
-    time.sleep(5)
-    
-    # Запуск с clean=True для сброса предыдущих сессий
-    try:
-        logger.info("Запуск бота с параметром clean=True")
-        bot.polling(none_stop=True, clean=True)
-    except Exception as e:
-        if "409" in str(e):
-            # В случае конфликта сессий делаем более долгую паузу
-            logger.warning(f"Обнаружен конфликт сессий (409): {e}")
-            logger.info("Ожидание 30 секунд для сброса сессий Telegram...")
-            time.sleep(30)
-            logger.info("Повторный запуск бота после сброса сессий")
-            bot.polling(none_stop=True, clean=True, timeout=30)
-        else:
-            logger.error(f"Ошибка при запуске бота: {e}")
-            raise""", infinity_polling_patch)
-                # Затем проверим и заменим версию без clean=True
-                elif "bot.polling(none_stop=True)" in new_content:
-                    new_content = new_content.replace("""    # Задержка перед запуском для стабилизации соединения
-    import time
-    logger.info("Ожидание 5 секунд перед запуском polling...")
-    time.sleep(5)
-    
-    # Запуск бота (без параметра clean, который не поддерживается)
-    try:
-        logger.info("Запуск бота с параметром none_stop=True")
-        bot.polling(none_stop=True)
-    except Exception as e:
-        if "409" in str(e):
-            # В случае конфликта сессий делаем более долгую паузу
-            logger.warning(f"Обнаружен конфликт сессий (409): {e}")
-            logger.info("Ожидание 30 секунд для сброса сессий Telegram...")
-            time.sleep(30)
-            logger.info("Повторный запуск бота после сброса сессий")
-            bot.polling(none_stop=True, timeout=30)
-        else:
-            logger.error(f"Ошибка при запуске бота: {e}")
-            raise""", infinity_polling_patch)
-                # Проверяем также простой вариант без полного блока
-                else:
-                    new_content = new_content.replace("bot.polling(none_stop=True)", "bot.infinity_polling(timeout=30)")
+            # Находим позицию для вставки нового кода
+            insert_pos = content.find("if __name__ == \"__main__\":")
+            if insert_pos > 0:
+                # Находим начало функции main()
+                main_pos = content.find("def main():", insert_pos)
+                if main_pos > 0:
+                    # Находим конец функции main()
+                    main_end = content.find("if __name__ == \"__main__\":", main_pos)
+                    if main_end > 0:
+                        # Вставляем наш код перед return или в конец функции
+                        return_pos = content.rfind("return", main_pos, main_end)
+                        if return_pos > 0:
+                            content = content[:return_pos] + replacement + "\n        " + content[return_pos:]
+                        else:
+                            # Если return не найден, добавляем перед концом функции
+                            content = content[:main_end] + replacement + "\n    " + content[main_end:]
             
-            # Сохраняем изменения
-            with open(bot_file, "w", encoding="utf-8") as f:
-                f.write(new_content)
-            
-            logger.info(f"Файл {bot_file} успешно модифицирован")
-            return True
-        else:
-            logger.warning("Не найден код инициализации клиента Anthropic")
-            return False
+            logger.info("Добавлена обработка ошибок при запуске бота")
+        
+        # Сохраняем измененный файл
+        with open(bot_file_path, 'w', encoding='utf-8') as file:
+            file.write(content)
+        
+        logger.info(f"Файл бота {bot_file_path} успешно модифицирован")
+        return True
     
     except Exception as e:
         logger.error(f"Ошибка при модификации файла бота: {e}")
@@ -313,79 +290,6 @@ def main():
     # Модифицируем файл бота
     file_mod_success = modify_bot_file()
     logger.info(f"Результат модификации файла: {'успешно' if file_mod_success else 'неудачно'}")
-    
-    # Добавляем шаблонные скрипты
-    template_scripts = """```batch
-@echo off
-echo Generating PowerShell optimizer script...
-
-echo # Windows_Optimizer.ps1 > WindowsOptimizer.ps1
-echo # Script for Windows optimization >> WindowsOptimizer.ps1
-echo. >> WindowsOptimizer.ps1
-echo # Check for administrator rights >> WindowsOptimizer.ps1
-echo if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { >> WindowsOptimizer.ps1
-echo     Write-Warning 'Please run this script as Administrator!' >> WindowsOptimizer.ps1
-echo     break >> WindowsOptimizer.ps1
-echo } >> WindowsOptimizer.ps1
-echo. >> WindowsOptimizer.ps1
-echo # Error handling >> WindowsOptimizer.ps1
-echo try { >> WindowsOptimizer.ps1
-echo     # Clean temporary files >> WindowsOptimizer.ps1
-echo     Write-Host 'Cleaning temporary files...' -ForegroundColor Green >> WindowsOptimizer.ps1
-echo     Remove-Item -Path $env:TEMP\\* -Force -Recurse -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1
-echo     Remove-Item -Path C:\\Windows\\Temp\\* -Force -Recurse -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1
-echo. >> WindowsOptimizer.ps1
-echo     # Performance optimization >> WindowsOptimizer.ps1
-echo     Write-Host 'Optimizing performance...' -ForegroundColor Green >> WindowsOptimizer.ps1
-echo     powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c # High Performance >> WindowsOptimizer.ps1
-echo. >> WindowsOptimizer.ps1
-echo     # Disable unnecessary services >> WindowsOptimizer.ps1
-echo     Write-Host 'Disabling unnecessary services...' -ForegroundColor Green >> WindowsOptimizer.ps1
-echo     Stop-Service -Name DiagTrack -Force -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1
-echo     Set-Service -Name DiagTrack -StartupType Disabled -ErrorAction SilentlyContinue >> WindowsOptimizer.ps1
-echo. >> WindowsOptimizer.ps1
-echo     Write-Host 'Optimization completed!' -ForegroundColor Green >> WindowsOptimizer.ps1
-echo } catch { >> WindowsOptimizer.ps1
-echo     Write-Warning "An error occurred: $_" >> WindowsOptimizer.ps1
-echo } >> WindowsOptimizer.ps1
-
-echo Creating optimized batch script...
-echo @echo off > WindowsOptimizer.bat
-echo echo Windows Optimizer Batch Script >> WindowsOptimizer.bat
-echo echo ============================== >> WindowsOptimizer.bat
-echo. >> WindowsOptimizer.bat
-echo :: Check for administrator rights >> WindowsOptimizer.bat
-echo net session ^>nul 2^>^&1 >> WindowsOptimizer.bat
-echo if %%errorLevel%% neq 0 ( >> WindowsOptimizer.bat
-echo     echo Please run this script as Administrator! >> WindowsOptimizer.bat
-echo     pause >> WindowsOptimizer.bat
-echo     exit >> WindowsOptimizer.bat
-echo ) >> WindowsOptimizer.bat
-echo. >> WindowsOptimizer.bat
-echo echo Cleaning temporary files... >> WindowsOptimizer.bat
-echo del /f /s /q %%temp%%\\*.* 2^>nul >> WindowsOptimizer.bat
-echo del /f /s /q C:\\Windows\\Temp\\*.* 2^>nul >> WindowsOptimizer.bat
-echo. >> WindowsOptimizer.bat
-echo echo Optimization completed! >> WindowsOptimizer.bat
-echo pause >> WindowsOptimizer.bat
-
-echo Scripts generated successfully.
-echo To run:
-echo - WindowsOptimizer.bat for batch script
-echo - powershell -ExecutionPolicy Bypass -NoProfile -File "WindowsOptimizer.ps1" for PowerShell script
-
-echo Starting Windows optimization script...
-echo ==========================================
-powershell -ExecutionPolicy Bypass -NoProfile -File "WindowsOptimizer.ps1"
-echo ==========================================
-echo Optimization script completed.
-pause
-```
-
-Этот скрипт решает проблемы с кодировкой, генерируя корректные PowerShell и Batch скрипты. Просто сохраните его как `generate_script.bat` и запустите."""
-    
-    # Добавляем глобальную переменную с шаблонными скриптами
-    globals()['template_scripts'] = template_scripts
     
     # Делаем паузу перед запуском для стабилизации системы
     logger.info("Ожидание 10 секунд перед запуском бота...")
@@ -410,17 +314,51 @@ pause
     except Exception as e:
         logger.warning(f"Не удалось проверить соединение с Telegram API: {e}")
     
-    # Запускаем основной скрипт бота
-    logger.info("Непосредственный запуск optimization_bot.py")
+    # Импортируем все необходимые классы перед модификацией OptimizationBot
     try:
-        # Проверяем версию telebot для выбора правильного метода запуска
-        import telebot
-        telebot_version = getattr(telebot, "__version__", "unknown")
-        logger.info(f"Версия библиотеки telebot: {telebot_version}")
+        # Импортируем сначала необходимые классы
+        from script_validator import ScriptValidator
+        from script_metrics import ScriptMetrics
+        from prompt_optimizer import PromptOptimizer
+        
+        # Импортируем модуль optimization_bot
+        from optimization_bot import OptimizationBot
+        
+        # Переопределяем метод __init__ для использования нашего патча
+        original_init = OptimizationBot.__init__
+        
+        def patched_init(self, api_key, validator=None):
+            """Патченный метод инициализации, который использует наш обертку Anthropic"""
+            import anthropic
+            self.api_key = api_key
+            self.validator = validator or ScriptValidator()
+            self.metrics = ScriptMetrics()
+            self.prompt_optimizer = PromptOptimizer(metrics=self.metrics)
+            
+            # Используем патченную версию Anthropic
+            logger.info("Инициализация OptimizationBot с патченной версией Anthropic")
+            try:
+                self.client = anthropic.Anthropic(api_key=api_key)
+                logger.info("Успешно создан экземпляр патченного клиента Anthropic")
+            except Exception as e:
+                logger.error(f"Ошибка при создании патченного клиента Anthropic: {e}")
+                # Используем прямое присваивание модуля
+                self.client = anthropic
+                logger.warning("Используется запасной вариант - прямое присваивание модуля anthropic")
+            
+            self.prompts = self.prompt_optimizer.get_optimized_prompts()
+        
+        # Заменяем метод инициализации
+        OptimizationBot.__init__ = patched_init
+        logger.info("Метод __init__ класса OptimizationBot успешно переопределен")
+        
+        # Запускаем основной скрипт бота
+        logger.info("Непосредственный запуск optimization_bot.py")
         
         # Импортируем и запускаем бота
         from optimization_bot import main as bot_main
         bot_main()
+    
     except ImportError as e:
         logger.error(f"Ошибка импорта: {e}")
         # В случае сбоя запускаем бот как подпроцесс
@@ -442,8 +380,4 @@ pause
     return 0
 
 if __name__ == "__main__":
-    try:
-        main()
-    except Exception as e:
-        logger.error(f"Критическая ошибка: {e}")
-        sys.exit(1) 
+    main() 
