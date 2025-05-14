@@ -129,3 +129,46 @@ python optimization_bot.py
 ## Лицензия
 
 Этот проект распространяется под лицензией MIT. Подробности в файле LICENSE.
+
+## Развертывание на Railway
+
+Этот проект настроен для автоматического развертывания на платформе [Railway](https://railway.app/).
+
+### Настройка Railway
+
+1. Создайте аккаунт на Railway и новый проект
+2. Выберите "Deploy from GitHub repo"
+3. Подключите свой репозиторий GitHub
+4. Добавьте необходимые переменные окружения в Railway:
+   - `TELEGRAM_TOKEN`
+   - `ANTHROPIC_API_KEY`
+   - `CLAUDE_MODEL`
+   - `LOG_LEVEL`
+   - `ALLOWED_USERS`
+   - `ADMIN_USER_ID`
+
+### Ручное развертывание через CLI
+
+1. Установите Railway CLI:
+```bash
+npm i -g @railway/cli
+```
+
+2. Войдите в свой аккаунт:
+```bash
+railway login
+```
+
+3. Привяжите проект:
+```bash
+railway link
+```
+
+4. Разверните проект:
+```bash
+railway up
+```
+
+### Автоматическое развертывание
+
+Railway автоматически разворачивает новую версию при каждом пуше в основную ветку репозитория.
