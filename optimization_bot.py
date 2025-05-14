@@ -313,6 +313,10 @@ class OptimizationBot:
         try:
             if not api_key:
                 raise ValueError("API ключ не может быть пустым")
+            # Импортируем антропик заново для чистой инициализации
+            import importlib
+            anthropic = importlib.import_module('anthropic')
+            # Создаем клиента только с необходимым параметром
             self.client = anthropic.Anthropic(api_key=api_key)
             logger.info("Клиент Anthropic успешно инициализирован")
         except Exception as e:
