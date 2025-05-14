@@ -303,13 +303,26 @@ def create_safe_anthropic_client(api_key):
     try:
         if not api_key:
             raise ValueError("API ключ не может быть пустым")
+        
         # Импортируем антропик заново для чистой инициализации
         import importlib
+        import sys
+        
+        # Удаляем модуль из sys.modules если он там есть
+        if 'anthropic' in sys.modules:
+            del sys.modules['anthropic']
+        
+        # Импортируем модуль заново
         anthropic = importlib.import_module('anthropic')
-        # Создаем клиента только с необходимым параметром
-        client = anthropic.Anthropic(api_key=api_key)
+        
+        # Создаем клиент с минимальными параметрами для версии 0.19.0
+        client = anthropic.Anthropic(
+            api_key=api_key
+        )
+        
         logger.info("Клиент Anthropic успешно инициализирован")
         return client
+        
     except Exception as e:
         logger.error(f"Ошибка при инициализации клиента Anthropic: {e}")
         raise
