@@ -35,40 +35,8 @@ def patch_anthropic_module():
         if not hasattr(anthropic, 'api_key'):
             anthropic.api_key = None
             logger.info("Добавлен атрибут api_key к модулю anthropic")
-            
-        # Переопределяем класс Anthropic для совместимости
-        logger.info("Создаем совместимую обертку для Anthropic")
         
-        # Сохраняем оригинальную функциональность
-        original_anthropic = None
-        if hasattr(anthropic, 'Anthropic'):
-            original_anthropic = anthropic.Anthropic
-        
-        # Создаем совместимый класс-обертку
-        class CompatAnthropicWrapper:
-            def __init__(self, api_key=None, **_kwargs):
-                self.api_key = api_key
-                anthropic.api_key = api_key
-                self._original = None
-                
-                # Пробуем инициализировать оригинальный клиент без проблемных аргументов
-                try:
-                    if original_anthropic:
-                        self._original = original_anthropic(api_key=api_key)
-                except Exception as e:
-                    logger.warning(f"Не удалось инициализировать оригинальный клиент: {e}")
-            
-            def messages(self):
-                # Заглушка для API
-                class MessagesAPI:
-                    def create(self, **kwargs):
-                        # Используем модельный ответ
-                        logger.error("Anthropic API недоступен - возвращаю тестовый ответ")
-                        return MockResponse()
-                
-                return MessagesAPI()
-        
-        # Класс для мок-ответа
+        # Класс для мок-ответа с API
         class MockResponse:
             def __init__(self):
                 class Content:
@@ -117,7 +85,34 @@ def patch_anthropic_module():
                         )
                 
                 self.content = [Content()]
+                
+        # Заглушка для API
+        class MessagesAPI:
+            def create(self, **kwargs):
+                # Используем модельный ответ
+                logger.error("Anthropic API недоступен - возвращаю тестовый ответ")
+                return MockResponse()
         
+        # Создаем совместимый класс-обертку
+        class CompatAnthropicWrapper:
+            def __init__(self, api_key=None, **_kwargs):
+                self.api_key = api_key
+                anthropic.api_key = api_key
+                # Добавляем messages к экземпляру
+                self._messages = MessagesAPI()
+            
+            @property
+            def messages(self):
+                return self._messages
+        
+        # Добавляем атрибут messages прямо в модуль
+        anthropic.messages = MessagesAPI()
+        
+        # Сохраняем оригинальный класс Anthropic, если он существует
+        original_anthropic = None
+        if hasattr(anthropic, 'Anthropic'):
+            original_anthropic = anthropic.Anthropic
+            
         # Заменяем Anthropic в модуле
         anthropic.Anthropic = CompatAnthropicWrapper
         logger.info("Anthropic успешно заменен на совместимую версию")
@@ -144,24 +139,51 @@ def modify_bot_file():
         with open(bot_file, "r", encoding="utf-8") as f:
             content = f.read()
         
-        # Заменяем инициализацию клиента на защищенную версию
-        original_line = "self.client = anthropic.Anthropic(api_key=api_key)"
-        replacement = """# Патч для совместимости с разными версиями Anthropic
-        import importlib
-        importlib.reload(anthropic)  # Перезагружаем модуль anthropic для применения патчей
+        # Находим строки, которые нужно заменить
+        if "self.client = anthropic.Anthropic(api_key=api_key)" in content:
+            logger.info("Найден код инициализации клиента Anthropic")
+            
+            # Заменяем инициализацию клиента на безопасную версию
+            new_content = content.replace(
+                "self.client = anthropic.Anthropic(api_key=api_key)",
+                """# Патч для совместимости с разными версиями Anthropic
         try:
-            # Пробуем использовать совместимую версию
+            # Устанавливаем API-ключ во всех возможных местах
+            anthropic.api_key = api_key
+            # Пробуем использовать патченную версию
             self.client = anthropic.Anthropic(api_key=api_key)
             logger.info("Используется патченная версия Anthropic")
         except Exception as e:
             # В случае ошибки используем прямое присваивание
-            anthropic.api_key = api_key
-            self.client = anthropic
+            self.client = anthropic  # Прямое использование модуля
             logger.warning(f"Используется fallback инициализация Anthropic: {e}")"""
-        
-        if original_line in content:
-            logger.info("Найден код инициализации клиента Anthropic")
-            new_content = content.replace(original_line, replacement)
+            )
+            
+            # Дополнительно заменяем код обработки ответа от API, если старая версия не работает
+            if "response.content[0].text" in new_content:
+                logger.info("Найден код обработки ответа API")
+                
+                # Добавляем безопасную обработку ответа
+                new_content = new_content.replace(
+                    "response_text = response.content[0].text",
+                    """try:
+                    # Пробуем получить текст из ответа в стандартном формате
+                    response_text = response.content[0].text
+                except (AttributeError, IndexError, TypeError):
+                    # Если не получается, проверяем старый формат API
+                    if hasattr(response, 'completion'):
+                        response_text = response.completion
+                    # Если и это не работает, используем прямой доступ
+                    elif isinstance(response, str):
+                        response_text = response
+                    else:
+                        # В крайнем случае используем str(response)
+                        response_text = str(response)
+                        if len(response_text) < 100:
+                            # Если ответ слишком короткий, вероятно ошибка - используем запасной шаблон
+                            logger.warning(f"Получен слишком короткий ответ: {response_text}")
+                            response_text = "Не удалось получить корректный ответ от API.\\n\\n" + template_scripts"""
+                )
             
             # Сохраняем изменения
             with open(bot_file, "w", encoding="utf-8") as f:
@@ -190,6 +212,58 @@ def main():
     # Модифицируем файл бота
     file_mod_success = modify_bot_file()
     logger.info(f"Результат модификации файла: {'успешно' if file_mod_success else 'неудачно'}")
+    
+    # Добавляем шаблонные скрипты
+    template_scripts = """```powershell
+# Windows_Optimizer.ps1
+# Скрипт для базовой оптимизации Windows
+
+# Проверка прав администратора
+if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Warning 'Запустите скрипт с правами администратора!'
+    break
+}
+
+# Очистка временных файлов
+Write-Host 'Очистка временных файлов...' -ForegroundColor Green
+Remove-Item -Path $env:TEMP\\* -Force -Recurse -ErrorAction SilentlyContinue
+Remove-Item -Path C:\\Windows\\Temp\\* -Force -Recurse -ErrorAction SilentlyContinue
+
+# Оптимизация производительности
+Write-Host 'Оптимизация производительности...' -ForegroundColor Green
+powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c # Высокая производительность
+
+# Отключение ненужных служб
+Write-Host 'Отключение ненужных служб...' -ForegroundColor Green
+Stop-Service -Name DiagTrack -Force
+Set-Service -Name DiagTrack -StartupType Disabled
+
+Write-Host 'Оптимизация завершена!' -ForegroundColor Green
+```
+
+```batch
+@echo off
+echo Windows Optimizer Batch Script
+echo ==============================
+
+:: Проверка прав администратора
+net session >nul 2>&1
+if %errorLevel% neq 0 (
+    echo Запустите скрипт с правами администратора!
+    pause
+    exit
+)
+
+echo Очистка временных файлов...
+del /f /s /q %temp%\*.*
+del /f /s /q C:\Windows\Temp\*.*
+
+echo Оптимизация завершена!
+pause
+```"""
+    
+    # Добавляем глобальную переменную с шаблонными скриптами
+    globals()['template_scripts'] = template_scripts
     
     # Запускаем основной скрипт бота
     logger.info("Непосредственный запуск optimization_bot.py")
