@@ -9,6 +9,7 @@ import sys
 import os
 import subprocess
 import logging
+import time
 
 # Настройка логирования
 logging.basicConfig(
@@ -210,6 +211,34 @@ def modify_bot_file():
                 
                 new_content = new_content.replace(orig_line, replacement)
             
+            # Патч для polling - добавление clean=True и обработки ошибки 409
+            if "bot.polling(none_stop=True)" in new_content:
+                logger.info("Найден код запуска polling")
+                
+                # Добавляем обработку ошибки 409 и параметр clean=True
+                polling_patch = """    # Задержка перед запуском для стабилизации соединения
+    import time
+    logger.info("Ожидание 5 секунд перед запуском polling...")
+    time.sleep(5)
+    
+    # Запуск с clean=True для сброса предыдущих сессий
+    try:
+        logger.info("Запуск бота с параметром clean=True")
+        bot.polling(none_stop=True, clean=True)
+    except Exception as e:
+        if "409" in str(e):
+            # В случае конфликта сессий делаем более долгую паузу
+            logger.warning(f"Обнаружен конфликт сессий (409): {e}")
+            logger.info("Ожидание 30 секунд для сброса сессий Telegram...")
+            time.sleep(30)
+            logger.info("Повторный запуск бота после сброса сессий")
+            bot.polling(none_stop=True, clean=True, timeout=30)
+        else:
+            logger.error(f"Ошибка при запуске бота: {e}")
+            raise"""
+                
+                new_content = new_content.replace("    bot.polling(none_stop=True)", polling_patch)
+            
             # Сохраняем изменения
             with open(bot_file, "w", encoding="utf-8") as f:
                 f.write(new_content)
@@ -311,17 +340,52 @@ pause
     # Добавляем глобальную переменную с шаблонными скриптами
     globals()['template_scripts'] = template_scripts
     
+    # Делаем паузу перед запуском для стабилизации системы
+    logger.info("Ожидание 10 секунд перед запуском бота...")
+    time.sleep(10)
+    
+    # Проверяем наличие активных подключений к Telegram API
+    # и сбрасываем текущее соединение при необходимости
+    try:
+        import requests
+        telegram_token = os.environ.get('TELEGRAM_TOKEN')
+        if telegram_token:
+            # Попытка сбросить вебхуки, если они используются
+            logger.info("Попытка сброса вебхуков Telegram...")
+            requests.get(f'https://api.telegram.org/bot{telegram_token}/deleteWebhook?drop_pending_updates=true')
+            time.sleep(2)
+            # Получаем информацию о боте для проверки соединения
+            response = requests.get(f'https://api.telegram.org/bot{telegram_token}/getMe')
+            if response.status_code == 200:
+                logger.info(f"Соединение с Telegram API установлено. Бот: {response.json().get('result', {}).get('username')}")
+            else:
+                logger.warning(f"Проблема с Telegram API: {response.status_code}, {response.text}")
+    except Exception as e:
+        logger.warning(f"Не удалось проверить соединение с Telegram API: {e}")
+    
     # Запускаем основной скрипт бота
     logger.info("Непосредственный запуск optimization_bot.py")
     try:
         # Импортируем и запускаем бота
         from optimization_bot import main as bot_main
         bot_main()
-    except Exception as e:
-        logger.error(f"Ошибка при запуске бота: {e}")
+    except ImportError as e:
+        logger.error(f"Ошибка импорта: {e}")
         # В случае сбоя запускаем бот как подпроцесс
         logger.info("Пробуем запустить бота как подпроцесс")
         subprocess.run([sys.executable, "optimization_bot.py"])
+    except Exception as e:
+        if "409" in str(e):
+            logger.warning(f"Конфликт сессий Telegram API (409): {e}")
+            logger.info("Ожидание 30 секунд перед повторной попыткой запуска...")
+            time.sleep(30)
+            logger.info("Запуск бота как подпроцесс после ожидания")
+            subprocess.run([sys.executable, "optimization_bot.py"])
+        else:
+            logger.error(f"Ошибка при запуске бота: {e}")
+            # В случае сбоя запускаем бот как подпроцесс
+            logger.info("Пробуем запустить бота как подпроцесс")
+            subprocess.run([sys.executable, "optimization_bot.py"])
     
     return 0
 

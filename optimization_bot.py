@@ -16,6 +16,7 @@ from dotenv import load_dotenv
 import telebot
 from telebot import types
 from telebot.async_telebot import AsyncTeleBot
+import time
 
 # Проверка на запуск только одного экземпляра бота - кросс-платформенная реализация
 def ensure_single_instance():
@@ -662,25 +663,18 @@ read -p "Нажмите Enter для выхода..."
 ### Способ 2: Через Терминал
 1. Откройте Терминал
 2. Перейдите в папку со скриптами командой `cd путь/к/папке/со/скриптами`
-3. Сделайте скрипт исполняемым: `chmod +x MacOptimizer.sh`
-4. Запустите скрипт: `sudo ./MacOptimizer.sh`
-5. Дождитесь завершения работы скрипта
+3. Сделайте скрипт исполняемым: `chmod +x MacOptimizer.sh StartOptimizer.command`
+4. Запустите скрипт одним из способов:
+   a) Через Finder: дважды щелкните на StartOptimizer.command
+   b) Через Терминал: sudo ./MacOptimizer.sh
 
-## Если скрипт не запускается
-Если при попытке открыть `StartOptimizer.command` появляется сообщение о безопасности:
-1. Откройте "Системные настройки"
-2. Перейдите в раздел "Защита и безопасность"
-3. Нажмите "Подтвердить открытие" или найдите сообщение о блокировке файла
-4. Или откройте Терминал и выполните: `chmod +x путь/к/StartOptimizer.command`
+ВАЖНЫЕ ПРИМЕЧАНИЯ:
+- Перед запуском создайте резервную копию важных данных.
+- Вас попросят ввести пароль администратора.
+- Скрипты создают резервные копии измененных параметров в папке ~/MacOptimizer_Backups.
+- Все действия скриптов записываются в лог-файл ~/Library/Logs/MacOptimizer.log.
 
-## Предупреждения
-- Перед запуском скрипта рекомендуется создать резервную копию важных данных
-- Все изменения настроек сохраняются в резервные копии в папке `~/MacOptimizer_Backups`
-- Лог работы скрипта сохраняется в файл `~/Library/Logs/MacOptimizer.log`
-
-## Поддержка
-При возникновении проблем обращайтесь за помощью через Telegram бота.
-"""
+Если у вас возникнут проблемы, используйте команду /help для получения справки."""
         else:
             # Windows скрипты (оставляем существующий код для Windows)
             # PowerShell скрипт - базовый шаблон для оптимизации
@@ -1810,8 +1804,41 @@ def main():
         total_errors = error_stats["total_errors"]
         logger.info(f"Обнаружено ошибок: {total_errors}")
         
-        # Запуск бота
-        bot.infinity_polling()
+        # Добавляем блок для сброса webhook API перед запуском
+        def ensure_webhook_deleted():
+            try:
+                # Сбрасываем webhook и активные соединения
+                logger.info("Сброс webhook и активных соединений...")
+                requests.get(f'https://api.telegram.org/bot{bot.token}/deleteWebhook?drop_pending_updates=true')
+                time.sleep(3)  # Небольшая пауза для завершения операции
+                logger.info("Webhook сброшен успешно")
+                return True
+            except Exception as e:
+                logger.warning(f"Ошибка при сбросе webhook: {e}")
+                return False
+        
+        # Сбрасываем webhook перед запуском
+        ensure_webhook_deleted()
+        
+        # Добавляем задержку перед запуском для стабилизации соединения
+        logger.info("Ожидание 5 секунд перед запуском polling...")
+        time.sleep(5)
+        
+        # Запуск с clean=True для сброса предыдущих сессий
+        try:
+            logger.info("Запуск бота с параметром clean=True")
+            bot.polling(none_stop=True, clean=True)
+        except Exception as e:
+            if "409" in str(e):
+                # В случае конфликта сессий делаем более долгую паузу
+                logger.warning(f"Обнаружен конфликт сессий (409): {e}")
+                logger.info("Ожидание 30 секунд для сброса сессий Telegram...")
+                time.sleep(30)
+                logger.info("Повторный запуск бота после сброса сессий")
+                bot.polling(none_stop=True, clean=True, timeout=30)
+            else:
+                logger.error(f"Ошибка при запуске бота: {e}")
+                raise
     except Exception as e:
         logger.error(f"Критическая ошибка при запуске бота: {e}")
 
