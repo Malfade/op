@@ -1,0 +1,36 @@
+FROM python:3.9-slim
+
+WORKDIR /app
+
+# Установка необходимых пакетов
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libffi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Настройка виртуального окружения
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Установка базовых пакетов
+RUN pip install --upgrade pip && \
+    pip install python-dotenv telebot requests
+
+# Установка библиотеки anthropic без зависимостей от прокси
+RUN pip install anthropic==0.19.0
+
+# Копирование файлов бота
+COPY . /app/
+
+# Исправление инициализации Anthropic
+RUN python -c "import re; \
+    with open('/app/optimization_bot.py', 'r', encoding='utf-8') as f: \
+        content = f.read(); \
+    pattern = r'def create_safe_anthropic_client\(api_key\):.*?try:.*?client = anthropic\.Anthropic\((.*?)\).*?return client.*?raise'; \
+    new_func = 'def create_safe_anthropic_client(api_key):\n    \"\"\"Создает клиент Anthropic с безопасными параметрами\"\"\"\n    try:\n        if not api_key:\n            raise ValueError(\"API ключ не может быть пустым\")\n        import importlib\n        import sys\n        if \"anthropic\" in sys.modules:\n            del sys.modules[\"anthropic\"]\n        anthropic = importlib.import_module(\"anthropic\")\n        client = anthropic.Anthropic(api_key=api_key)\n        return client\n    except Exception as e:\n        logger.error(f\"Ошибка при инициализации клиента Anthropic: {e}\")\n        raise'; \
+    modified = re.sub(pattern, new_func, content, flags=re.DOTALL); \
+    with open('/app/optimization_bot.py', 'w', encoding='utf-8') as f: \
+        f.write(modified)"
+
+# Запуск бота
+CMD ["python", "direct_bot.py"] 

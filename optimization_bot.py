@@ -315,10 +315,8 @@ def create_safe_anthropic_client(api_key):
         # Импортируем модуль заново
         anthropic = importlib.import_module('anthropic')
         
-        # Создаем клиент с минимальными параметрами для версии 0.19.0
-        client = anthropic.Anthropic(
-            api_key=api_key
-        )
+        # Создаем клиент только с безопасными параметрами
+        client = anthropic.Anthropic(api_key=api_key)
         
         logger.info("Клиент Anthropic успешно инициализирован")
         return client
