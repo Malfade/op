@@ -160,13 +160,12 @@ def modify_bot_file():
             )
             
             # Дополнительно заменяем код обработки ответа от API, если старая версия не работает
-            if "response.content[0].text" in new_content:
+            if "response_text = response.content[0].text" in new_content:
                 logger.info("Найден код обработки ответа API")
                 
-                # Добавляем безопасную обработку ответа
-                new_content = new_content.replace(
-                    "response_text = response.content[0].text",
-                    """try:
+                # Используем точное совпадение строки с отступами для корректной замены
+                orig_line = "                response_text = response.content[0].text"
+                replacement = """                try:
                     # Пробуем получить текст из ответа в стандартном формате
                     response_text = response.content[0].text
                 except (AttributeError, IndexError, TypeError):
@@ -183,7 +182,8 @@ def modify_bot_file():
                             # Если ответ слишком короткий, вероятно ошибка - используем запасной шаблон
                             logger.warning(f"Получен слишком короткий ответ: {response_text}")
                             response_text = "Не удалось получить корректный ответ от API.\\n\\n" + template_scripts"""
-                )
+                
+                new_content = new_content.replace(orig_line, replacement)
             
             # Сохраняем изменения
             with open(bot_file, "w", encoding="utf-8") as f:
