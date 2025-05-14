@@ -295,6 +295,24 @@ def validate_and_fix_scripts(files):
     
     return enhanced_files, fixed_validation_results, errors_corrected
 
+def create_safe_anthropic_client(api_key):
+    """
+    Создает клиент Anthropic с безопасными параметрами
+    """
+    try:
+        if not api_key:
+            raise ValueError("API ключ не может быть пустым")
+        # Импортируем антропик заново для чистой инициализации
+        import importlib
+        anthropic = importlib.import_module('anthropic')
+        # Создаем клиента только с необходимым параметром
+        client = anthropic.Anthropic(api_key=api_key)
+        logger.info("Клиент Anthropic успешно инициализирован")
+        return client
+    except Exception as e:
+        logger.error(f"Ошибка при инициализации клиента Anthropic: {e}")
+        raise
+
 class OptimizationBot:
     """Класс для оптимизации Windows с помощью AI"""
     
@@ -310,18 +328,7 @@ class OptimizationBot:
         self.validator = validator or ScriptValidator()
         self.metrics = ScriptMetrics()
         self.prompt_optimizer = PromptOptimizer(metrics=self.metrics)
-        try:
-            if not api_key:
-                raise ValueError("API ключ не может быть пустым")
-            # Импортируем антропик заново для чистой инициализации
-            import importlib
-            anthropic = importlib.import_module('anthropic')
-            # Создаем клиента только с необходимым параметром
-            self.client = anthropic.Anthropic(api_key=api_key)
-            logger.info("Клиент Anthropic успешно инициализирован")
-        except Exception as e:
-            logger.error(f"Ошибка при инициализации клиента Anthropic: {e}")
-            raise
+        self.client = create_safe_anthropic_client(api_key)
         self.prompts = self.prompt_optimizer.get_optimized_prompts()
     
     async def generate_new_script(self, message):

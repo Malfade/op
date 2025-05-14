@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Прямой запуск бота оптимизации с патчем Anthropic
+Прямой запуск бота оптимизации
 """
 
 import sys
@@ -27,71 +27,6 @@ if not api_key:
     logger.warning("Установите переменную окружения ANTHROPIC_API_KEY с вашим API ключом")
 else:
     logger.info(f"API ключ Anthropic найден (длина: {len(api_key)} символов)")
-
-class SafeAnthropicClient:
-    """
-    Безопасная обёртка для клиента Anthropic
-    """
-    def __init__(self, api_key):
-        import anthropic
-        self._api_key = api_key
-        self._client = None
-        self._init_client()
-    
-    def _init_client(self):
-        """Инициализация клиента с минимальными параметрами"""
-        import anthropic
-        try:
-            # Используем оригинальный класс Anthropic
-            original_class = getattr(anthropic, '_original_Anthropic', None)
-            if original_class is None:
-                logger.error("Оригинальный класс Anthropic не найден")
-                raise RuntimeError("Оригинальный класс Anthropic не найден")
-                
-            self._client = original_class(api_key=self._api_key)
-            logger.info("Клиент Anthropic успешно инициализирован")
-        except Exception as e:
-            logger.error(f"Ошибка при инициализации клиента Anthropic: {e}")
-            raise
-    
-    @property
-    def messages(self):
-        """Доступ к API сообщений"""
-        if self._client is None:
-            raise RuntimeError("Клиент Anthropic не инициализирован")
-        return self._client.messages
-    
-    def __getattr__(self, name):
-        """Проксирование всех остальных атрибутов к базовому клиенту"""
-        if self._client is None:
-            raise RuntimeError("Клиент Anthropic не инициализирован")
-        return getattr(self._client, name)
-
-# Функция для патчинга модуля anthropic
-def patch_anthropic_module():
-    """
-    Патчит модуль anthropic для обеспечения совместимости с API Claude
-    """
-    try:
-        import anthropic
-        logger.info(f"Текущая версия модуля anthropic: {getattr(anthropic, '__version__', 'неизвестна')}")
-        
-        # Сохраняем оригинальный класс, если еще не сохранен
-        if not hasattr(anthropic, '_original_Anthropic'):
-            anthropic._original_Anthropic = anthropic.Anthropic
-            logger.info("Сохранен оригинальный класс Anthropic")
-        
-        # Заменяем класс Anthropic на нашу безопасную версию
-        anthropic.Anthropic = SafeAnthropicClient
-        logger.info("Класс Anthropic успешно заменен на SafeAnthropicClient")
-        
-        return True
-    except ImportError:
-        logger.error("Ошибка импорта модуля anthropic")
-        return False
-    except Exception as e:
-        logger.error(f"Ошибка при патчинге модуля anthropic: {e}")
-        return False
 
 def modify_bot_file():
     """
@@ -133,12 +68,8 @@ def main():
     """
     Основная функция запуска бота
     """
-    # Запускаем бот оптимизации с патчем
-    logger.info("Запуск бота оптимизации с патчем")
-    
-    # Патчим модуль anthropic
-    patch_result = patch_anthropic_module()
-    logger.info(f"Результат патчинга модуля: {'успешно' if patch_result else 'неудачно'}")
+    # Запускаем бот оптимизации
+    logger.info("Запуск бота оптимизации")
     
     # Модифицируем файл бота
     if os.path.exists("optimization_bot.py"):
