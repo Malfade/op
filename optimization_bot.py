@@ -311,14 +311,13 @@ class OptimizationBot:
         self.metrics = ScriptMetrics()
         self.prompt_optimizer = PromptOptimizer(metrics=self.metrics)
         try:
-                self.client = anthropic.Anthropic(api_key=api_key)
-            except Exception as e:
-                logger.warning(f"Ошибка при стандартной инициализации Anthropic: {e}")
-                # Импортируем антропик заново, чтобы избежать рекурсии
-                import importlib
-                anthropic_module = importlib.import_module('anthropic')
-                # Создаем экземпляр напрямую, минуя патченный метод
-                self.client = anthropic_module._original_Anthropic(api_key=api_key)
+            if not api_key:
+                raise ValueError("API ключ не может быть пустым")
+            self.client = anthropic.Anthropic(api_key=api_key)
+            logger.info("Клиент Anthropic успешно инициализирован")
+        except Exception as e:
+            logger.error(f"Ошибка при инициализации клиента Anthropic: {e}")
+            raise
         self.prompts = self.prompt_optimizer.get_optimized_prompts()
     
     async def generate_new_script(self, message):

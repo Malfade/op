@@ -7,6 +7,7 @@
 
 import os
 import logging
+import re
 
 # Настройка логирования
 logging.basicConfig(
@@ -15,54 +16,49 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def fix_optimization_bot():
-    """
-    Модифицирует файл optimization_bot.py для предотвращения рекурсии 
-    при инициализации клиента Anthropic
-    """
+def fix_anthropic_initialization():
     try:
-        bot_file_path = "optimization_bot.py"
-        
-        if not os.path.exists(bot_file_path):
-            logger.error(f"Файл {bot_file_path} не найден")
+        # Проверяем существование файла
+        if not os.path.exists('optimization_bot.py'):
+            print("Ошибка: файл optimization_bot.py не найден")
             return False
-        
-        logger.info(f"Чтение файла {bot_file_path}")
-        
-        # Чтение содержимого файла
-        with open(bot_file_path, 'r', encoding='utf-8') as file:
-            content = file.read()
-        
+            
+        # Читаем содержимое файла
+        with open('optimization_bot.py', 'r', encoding='utf-8') as f:
+            content = f.read()
+            print("Файл optimization_bot.py успешно прочитан")
+            
         # Ищем строку инициализации клиента
-        target_line = "self.client = anthropic.Anthropic(api_key=api_key)"
-        if target_line in content:
-            # Меняем строку на безопасную инициализацию
-            new_content = content.replace(
-                target_line,
-                "try:\n"
-                "                self.client = anthropic.Anthropic(api_key=api_key)\n"
-                "            except Exception as e:\n"
-                "                logger.warning(f\"Ошибка при стандартной инициализации Anthropic: {e}\")\n"
-                "                # Импортируем антропик заново, чтобы избежать рекурсии\n"
-                "                import importlib\n"
-                "                anthropic_module = importlib.import_module('anthropic')\n"
-                "                # Создаем экземпляр напрямую, минуя патченный метод\n"
-                "                self.client = anthropic_module._original_Anthropic(api_key=api_key)"
-            )
-            
-            # Сохраняем модифицированный файл
-            with open(bot_file_path, 'w', encoding='utf-8') as file:
-                file.write(new_content)
-            
-            logger.info(f"Файл {bot_file_path} успешно модифицирован")
-            return True
-        else:
-            logger.warning(f"Строка инициализации клиента не найдена в файле {bot_file_path}")
+        init_pattern = r'self\.client\s*=\s*anthropic\.Anthropic\(api_key=api_key\)'
+        if not re.search(init_pattern, content):
+            print("Ошибка: строка инициализации клиента не найдена")
             return False
+            
+        print("Найдена строка инициализации клиента Anthropic")
+            
+        # Заменяем строку на новую версию с проверкой
+        new_init = '''try:
+            if not api_key:
+                raise ValueError("API ключ не может быть пустым")
+            self.client = anthropic.Anthropic(api_key=api_key)
+            logger.info("Клиент Anthropic успешно инициализирован")
+        except Exception as e:
+            logger.error(f"Ошибка при инициализации клиента Anthropic: {e}")
+            raise'''
+            
+        # Выполняем замену с учетом отступов
+        modified_content = re.sub(init_pattern, new_init.strip(), content)
+            
+        # Записываем обновленное содержимое
+        with open('optimization_bot.py', 'w', encoding='utf-8') as f:
+            f.write(modified_content)
+            
+        print("Файл optimization_bot.py успешно обновлен")
+        return True
             
     except Exception as e:
-        logger.error(f"Ошибка при модификации файла: {e}")
+        print(f"Произошла ошибка при обновлении файла: {e}")
         return False
 
-if __name__ == "__main__":
-    fix_optimization_bot() 
+if __name__ == '__main__':
+    fix_anthropic_initialization() 
