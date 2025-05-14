@@ -28,6 +28,35 @@ if not api_key:
 else:
     logger.info(f"API ключ Anthropic найден (длина: {len(api_key)} символов)")
 
+class SafeAnthropicClient:
+    """
+    Безопасная обёртка для клиента Anthropic
+    """
+    def __init__(self, api_key):
+        import anthropic
+        self._api_key = api_key
+        self._client = None
+        self._init_client()
+    
+    def _init_client(self):
+        """Инициализация клиента с минимальными параметрами"""
+        import anthropic
+        try:
+            self._client = anthropic.Anthropic(api_key=self._api_key)
+            logger.info("Клиент Anthropic успешно инициализирован")
+        except Exception as e:
+            logger.error(f"Ошибка при инициализации клиента Anthropic: {e}")
+            raise
+    
+    @property
+    def messages(self):
+        """Доступ к API сообщений"""
+        return self._client.messages
+    
+    def __getattr__(self, name):
+        """Проксирование всех остальных атрибутов к базовому клиенту"""
+        return getattr(self._client, name)
+
 # Функция для патчинга модуля anthropic
 def patch_anthropic_module():
     """
@@ -37,40 +66,14 @@ def patch_anthropic_module():
         import anthropic
         logger.info(f"Текущая версия модуля anthropic: {getattr(anthropic, '__version__', 'неизвестна')}")
         
-        # Патчим класс Anthropic, если он существует
-        if hasattr(anthropic, 'Anthropic'):
-            # Сохраняем оригинальный класс для последующего использования
+        # Сохраняем оригинальный класс
+        if not hasattr(anthropic, '_original_Anthropic'):
             anthropic._original_Anthropic = anthropic.Anthropic
-            logger.info("Сохранен оригинальный класс Anthropic")
-            
-            # Сохраняем оригинальный метод __init__
-            original_init = anthropic.Anthropic.__init__
-            
-            # Создаем простую обертку для исключения проблемных параметров
-            def patched_anthropic_init(self, *args, **kwargs):
-                # Список проблемных параметров для удаления
-                problem_params = ['proxies', 'http_client', 'custom_headers', 'base_url']
-                
-                # Создаем копию параметров
-                kwargs_clean = kwargs.copy()
-                
-                # Удаляем все проблемные параметры
-                for param in problem_params:
-                    if param in kwargs_clean:
-                        logger.info(f"Удален параметр '{param}' при инициализации Anthropic")
-                        del kwargs_clean[param]
-                
-                # Оставляем только api_key
-                if 'api_key' in kwargs_clean:
-                    kwargs_clean = {'api_key': kwargs_clean['api_key']}
-                
-                # Вызываем оригинальный метод инициализации
-                return original_init(self, *args, **kwargs_clean)
-            
-            # Патчим метод __init__
-            anthropic.Anthropic.__init__ = patched_anthropic_init
-            logger.info("Метод __init__ класса Anthropic успешно патчен")
-            
+        
+        # Заменяем класс Anthropic на нашу безопасную версию
+        anthropic.Anthropic = SafeAnthropicClient
+        logger.info("Класс Anthropic успешно заменен на SafeAnthropicClient")
+        
         return True
     except ImportError:
         logger.error("Ошибка импорта модуля anthropic")
