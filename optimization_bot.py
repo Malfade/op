@@ -17,6 +17,7 @@ import telebot
 from telebot import types
 from telebot.async_telebot import AsyncTeleBot
 import time
+from telebot.apihelper import ApiTelegramException
 
 # Проверка на запуск только одного экземпляра бота - кросс-платформенная реализация
 def ensure_single_instance():
@@ -1795,64 +1796,58 @@ def cmd_update_prompts(message):
         logger.error(f"Ошибка при обновлении промптов: {e}")
         bot.send_message(message.chat.id, "❌ Не удалось обновить промпты. Попробуйте позже.")
 
-def main():
-    """Запуск бота"""
+def reset_bot_sessions():
+    """Сбрасывает все активные сессии бота"""
     try:
-        # Проверяем, не запущен ли уже бот
-        if not ensure_single_instance():
-            logger.error("Завершаем работу из-за уже запущенного экземпляра")
-            return
+        token = os.getenv('TELEGRAM_BOT_TOKEN')
+        if not token:
+            logger.error("Не найден токен Telegram бота")
+            return False
             
-        logger.info("Запуск бота...")
+        url = f"https://api.telegram.org/bot{token}/deleteWebhook"
+        response = requests.get(url)
         
-        # Инициализация оптимизатора промптов
-        prompt_optimizer = PromptOptimizer()
-        
-        # Попытка обновления промптов на основе накопленных данных
-        updated = prompt_optimizer.update_prompts_based_on_metrics()
-        if updated:
-            logger.info("Промпты успешно обновлены на основе накопленных данных")
+        if response.status_code == 200:
+            logger.info("Успешно сброшены все активные сессии бота")
+            time.sleep(10)  # Ждем 10 секунд для полного завершения предыдущих сессий
+            return True
         else:
-            logger.info("Промпты не были обновлены, используются стандартные шаблоны")
+            logger.warning(f"Не удалось сбросить сессии бота. Код ответа: {response.status_code}")
+            return False
             
-        # Вывод статистики для логов
-        logger.info("Статистика по скриптам:")
-        logger.info(f"Всего сгенерировано скриптов: {script_gen_count}")
-        
-        total_errors = error_stats["total_errors"]
-        logger.info(f"Обнаружено ошибок: {total_errors}")
-        
-        # Сбрасываем webhook перед запуском
-        try:
-            # Сбрасываем webhook и активные соединения
-            logger.info("Сброс webhook и активных соединений...")
-            requests.get(f'https://api.telegram.org/bot{bot.token}/deleteWebhook?drop_pending_updates=true')
-            time.sleep(3)  # Небольшая пауза для завершения операции
-            logger.info("Webhook сброшен успешно")
-        except Exception as e:
-            logger.warning(f"Ошибка при сбросе webhook: {e}")
-        
-        # Добавляем задержку перед запуском для стабилизации соединения
-        logger.info("Ожидание 5 секунд перед запуском infinity_polling...")
-        time.sleep(5)
-        
-        # Запуск бота с использованием infinity_polling (более стабильный метод)
-        try:
-            logger.info("Запуск бота с использованием infinity_polling")
-            bot.infinity_polling(timeout=30, long_polling_timeout=15)
-        except Exception as e:
-            if "409" in str(e):
-                # В случае конфликта сессий делаем более долгую паузу
-                logger.warning(f"Обнаружен конфликт сессий (409): {e}")
-                logger.info("Ожидание 30 секунд для сброса сессий Telegram...")
-                time.sleep(30)
-                logger.info("Повторный запуск бота после сброса сессий")
-                bot.infinity_polling(timeout=60, long_polling_timeout=30)
-            else:
-                logger.error(f"Ошибка при запуске бота: {e}")
-                raise
     except Exception as e:
-        logger.error(f"Критическая ошибка при запуске бота: {e}")
+        logger.error(f"Ошибка при сбросе сессий бота: {e}")
+        return False
+
+def main():
+    """Основная функция запуска бота"""
+    try:
+        # Сбрасываем все активные сессии бота
+        if not reset_bot_sessions():
+            logger.warning("Не удалось сбросить сессии бота, продолжаем запуск...")
+            time.sleep(5)  # Даем время на завершение предыдущих сессий
+            
+        logger.info("Запускаем бота...")
+        while True:
+            try:
+                bot.infinity_polling(timeout=30, long_polling_timeout=15)
+            except ApiTelegramException as e:
+                if e.error_code == 409:
+                    logger.warning("Обнаружен конфликт сессий, пытаемся сбросить...")
+                    if reset_bot_sessions():
+                        logger.info("Сессии успешно сброшены, перезапускаем бота...")
+                        continue
+                logger.error(f"Ошибка Telegram API: {e}")
+                time.sleep(5)
+            except Exception as e:
+                logger.error(f"Ошибка при работе бота: {e}")
+                time.sleep(5)
+                
+    except KeyboardInterrupt:
+        logger.info("Бот остановлен пользователем")
+    except Exception as e:
+        logger.error(f"Критическая ошибка: {e}")
+        raise
 
 if __name__ == "__main__":
     main() 
