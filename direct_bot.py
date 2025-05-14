@@ -47,23 +47,46 @@ def patch_anthropic_module():
                             "```powershell\n"
                             "# Windows_Optimizer.ps1\n"
                             "# Скрипт для базовой оптимизации Windows\n\n"
+                            "# Функция для создания резервных копий\n"
+                            "function Backup-Settings {\n"
+                            "    param (\n"
+                            "        [string]$Name,\n"
+                            "        [string]$Data\n"
+                            "    )\n"
+                            "    \n"
+                            "    $BackupDir = \"$env:USERPROFILE\\WindowsOptimizer_Backups\"\n"
+                            "    if (!(Test-Path $BackupDir)) {\n"
+                            "        New-Item -Path $BackupDir -ItemType Directory -Force | Out-Null\n"
+                            "    }\n"
+                            "    \n"
+                            "    $TimeStamp = Get-Date -Format \"yyyyMMdd_HHmmss\"\n"
+                            "    $BackupFile = \"$BackupDir\\${Name}_$TimeStamp.bak\"\n"
+                            "    \n"
+                            "    $Data | Out-File -FilePath $BackupFile -Encoding utf8 -Force\n"
+                            "    Write-Host \"Создана резервная копия $Name в файле $BackupFile\" -ForegroundColor Cyan\n"
+                            "}\n\n"
                             "# Проверка прав администратора\n"
                             "if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {\n"
                             "    Write-Warning 'Запустите скрипт с правами администратора!'\n"
                             "    break\n"
                             "}\n\n"
-                            "# Очистка временных файлов\n"
-                            "Write-Host 'Очистка временных файлов...' -ForegroundColor Green\n"
-                            "Remove-Item -Path $env:TEMP\\* -Force -Recurse -ErrorAction SilentlyContinue\n"
-                            "Remove-Item -Path C:\\Windows\\Temp\\* -Force -Recurse -ErrorAction SilentlyContinue\n\n"
-                            "# Оптимизация производительности\n"
-                            "Write-Host 'Оптимизация производительности...' -ForegroundColor Green\n"
-                            "powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c # Высокая производительность\n\n"
-                            "# Отключение ненужных служб\n"
-                            "Write-Host 'Отключение ненужных служб...' -ForegroundColor Green\n"
-                            "Stop-Service -Name DiagTrack -Force\n"
-                            "Set-Service -Name DiagTrack -StartupType Disabled\n\n"
-                            "Write-Host 'Оптимизация завершена!' -ForegroundColor Green\n"
+                            "# Обработка ошибок\n"
+                            "try {\n"
+                            "    # Очистка временных файлов\n"
+                            "    Write-Host 'Очистка временных файлов...' -ForegroundColor Green\n"
+                            "    Remove-Item -Path $env:TEMP\\* -Force -Recurse -ErrorAction SilentlyContinue\n"
+                            "    Remove-Item -Path C:\\Windows\\Temp\\* -Force -Recurse -ErrorAction SilentlyContinue\n\n"
+                            "    # Оптимизация производительности\n"
+                            "    Write-Host 'Оптимизация производительности...' -ForegroundColor Green\n"
+                            "    powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c # Высокая производительность\n\n"
+                            "    # Отключение ненужных служб\n"
+                            "    Write-Host 'Отключение ненужных служб...' -ForegroundColor Green\n"
+                            "    Stop-Service -Name DiagTrack -Force -ErrorAction SilentlyContinue\n"
+                            "    Set-Service -Name DiagTrack -StartupType Disabled -ErrorAction SilentlyContinue\n\n"
+                            "    Write-Host 'Оптимизация завершена!' -ForegroundColor Green\n"
+                            "} catch {\n"
+                            "    Write-Warning \"Произошла ошибка: $_\"\n"
+                            "}\n"
                             "```\n\n"
                             "```batch\n"
                             "@echo off\n"
@@ -77,8 +100,8 @@ def patch_anthropic_module():
                             "    exit\n"
                             ")\n\n"
                             "echo Очистка временных файлов...\n"
-                            "del /f /s /q %temp%\\*.*\n"
-                            "del /f /s /q C:\\Windows\\Temp\\*.*\n\n"
+                            "del /f /s /q %temp%\\*.* 2>nul\n"
+                            "del /f /s /q C:\\Windows\\Temp\\*.* 2>nul\n\n"
                             "echo Оптимизация завершена!\n"
                             "pause\n"
                             "```"
@@ -218,27 +241,51 @@ def main():
 # Windows_Optimizer.ps1
 # Скрипт для базовой оптимизации Windows
 
+# Функция для создания резервных копий
+function Backup-Settings {
+    param (
+        [string]$Name,
+        [string]$Data
+    )
+    
+    $BackupDir = "$env:USERPROFILE\\WindowsOptimizer_Backups"
+    if (!(Test-Path $BackupDir)) {
+        New-Item -Path $BackupDir -ItemType Directory -Force | Out-Null
+    }
+    
+    $TimeStamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    $BackupFile = "$BackupDir\\${Name}_$TimeStamp.bak"
+    
+    $Data | Out-File -FilePath $BackupFile -Encoding utf8 -Force
+    Write-Host "Создана резервная копия $Name в файле $BackupFile" -ForegroundColor Cyan
+}
+
 # Проверка прав администратора
 if (-NOT ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Warning 'Запустите скрипт с правами администратора!'
     break
 }
 
-# Очистка временных файлов
-Write-Host 'Очистка временных файлов...' -ForegroundColor Green
-Remove-Item -Path $env:TEMP\\* -Force -Recurse -ErrorAction SilentlyContinue
-Remove-Item -Path C:\\Windows\\Temp\\* -Force -Recurse -ErrorAction SilentlyContinue
+# Обработка ошибок
+try {
+    # Очистка временных файлов
+    Write-Host 'Очистка временных файлов...' -ForegroundColor Green
+    Remove-Item -Path $env:TEMP\\* -Force -Recurse -ErrorAction SilentlyContinue
+    Remove-Item -Path C:\\Windows\\Temp\\* -Force -Recurse -ErrorAction SilentlyContinue
 
-# Оптимизация производительности
-Write-Host 'Оптимизация производительности...' -ForegroundColor Green
-powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c # Высокая производительность
+    # Оптимизация производительности
+    Write-Host 'Оптимизация производительности...' -ForegroundColor Green
+    powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c # Высокая производительность
 
-# Отключение ненужных служб
-Write-Host 'Отключение ненужных служб...' -ForegroundColor Green
-Stop-Service -Name DiagTrack -Force
-Set-Service -Name DiagTrack -StartupType Disabled
+    # Отключение ненужных служб
+    Write-Host 'Отключение ненужных служб...' -ForegroundColor Green
+    Stop-Service -Name DiagTrack -Force -ErrorAction SilentlyContinue
+    Set-Service -Name DiagTrack -StartupType Disabled -ErrorAction SilentlyContinue
 
-Write-Host 'Оптимизация завершена!' -ForegroundColor Green
+    Write-Host 'Оптимизация завершена!' -ForegroundColor Green
+} catch {
+    Write-Warning "Произошла ошибка: $_"
+}
 ```
 
 ```batch
@@ -255,8 +302,8 @@ if %errorLevel% neq 0 (
 )
 
 echo Очистка временных файлов...
-del /f /s /q %temp%\*.*
-del /f /s /q C:\Windows\Temp\*.*
+del /f /s /q %temp%\*.* 2>nul
+del /f /s /q C:\Windows\Temp\*.* 2>nul
 
 echo Оптимизация завершена!
 pause
