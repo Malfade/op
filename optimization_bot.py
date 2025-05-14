@@ -310,7 +310,15 @@ class OptimizationBot:
         self.validator = validator or ScriptValidator()
         self.metrics = ScriptMetrics()
         self.prompt_optimizer = PromptOptimizer(metrics=self.metrics)
-        self.client = anthropic.Anthropic(api_key=api_key)
+        try:
+                self.client = anthropic.Anthropic(api_key=api_key)
+            except Exception as e:
+                logger.warning(f"Ошибка при стандартной инициализации Anthropic: {e}")
+                # Импортируем антропик заново, чтобы избежать рекурсии
+                import importlib
+                anthropic_module = importlib.import_module('anthropic')
+                # Создаем экземпляр напрямую, минуя патченный метод
+                self.client = anthropic_module._original_Anthropic(api_key=api_key)
         self.prompts = self.prompt_optimizer.get_optimized_prompts()
     
     async def generate_new_script(self, message):

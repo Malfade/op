@@ -37,20 +37,29 @@ def patch_anthropic_module():
         import anthropic
         logger.info(f"Текущая версия модуля anthropic: {getattr(anthropic, '__version__', 'неизвестна')}")
         
-        # Сохраняем оригинальный класс Anthropic
-        original_anthropic = None
+        # Патчим класс Anthropic, если он существует
         if hasattr(anthropic, 'Anthropic'):
-            original_anthropic = anthropic.Anthropic
+            # Сохраняем оригинальный класс для последующего использования
+            anthropic._original_Anthropic = anthropic.Anthropic
+            logger.info("Сохранен оригинальный класс Anthropic")
+            
+            # Сохраняем оригинальный метод __init__
+            original_init = anthropic.Anthropic.__init__
             
             # Создаем простую обертку для исключения проблемных параметров
             def patched_anthropic_init(self, *args, **kwargs):
                 # Удаляем проблемные параметры
                 if 'proxies' in kwargs:
-                    del kwargs['proxies']
-                # Вызываем оригинальный конструктор
-                return original_anthropic.__init__(self, *args, **kwargs)
+                    logger.info("Удален параметр 'proxies' при инициализации Anthropic")
+                    kwargs_clean = kwargs.copy()
+                    del kwargs_clean['proxies']
+                else:
+                    kwargs_clean = kwargs
+                
+                # Вызываем оригинальный метод инициализации
+                return original_init(self, *args, **kwargs_clean)
             
-            # Патчим только метод __init__, сохраняя весь остальной функционал
+            # Патчим метод __init__
             anthropic.Anthropic.__init__ = patched_anthropic_init
             logger.info("Метод __init__ класса Anthropic успешно патчен")
             
