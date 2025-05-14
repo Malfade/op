@@ -19,6 +19,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Глобальная переменная для отслеживания состояния патча
+ANTHROPIC_PATCHED = False
+
+# Глобальная переменная для хранения экземпляра клиента
+GLOBAL_ANTHROPIC_CLIENT = None
+
 # Класс для мок-ответа с API, используемый глобально
 class MockResponse:
     def __init__(self):
@@ -98,6 +104,13 @@ def patch_anthropic_module():
     """
     Патчит модуль anthropic, добавляя необходимые методы
     """
+    global ANTHROPIC_PATCHED
+    
+    # Если модуль уже патчен, просто возвращаем True
+    if ANTHROPIC_PATCHED:
+        logger.info("Модуль anthropic уже был патчен ранее")
+        return True
+        
     try:
         import anthropic
         import importlib.util
@@ -110,6 +123,12 @@ def patch_anthropic_module():
                 """
                 Обертка для инициализации клиента Anthropic с разными версиями API
                 """
+                # Проверяем, существует ли уже глобальный экземпляр
+                if 'GLOBAL_ANTHROPIC_CLIENT' in globals() and GLOBAL_ANTHROPIC_CLIENT is not None:
+                    self._client = GLOBAL_ANTHROPIC_CLIENT
+                    logger.info("Использован существующий глобальный экземпляр клиента Anthropic")
+                    return
+                
                 self._api_key = kwargs.get('api_key', os.environ.get('ANTHROPIC_API_KEY', ''))
                 
                 # Сохраняем аргументы для последующей инициализации
@@ -124,17 +143,32 @@ def patch_anthropic_module():
                 
                 # Пробуем инициализировать клиент
                 self._try_init_client()
+                
+                # Сохраняем экземпляр клиента глобально
+                if self._client is not None:
+                    GLOBAL_ANTHROPIC_CLIENT = self._client
             
             def _try_init_client(self):
                 """
                 Пытается инициализировать клиент с разными версиями API
                 """
+                # Проверяем, существует ли уже глобальный экземпляр
+                if 'GLOBAL_ANTHROPIC_CLIENT' in globals() and GLOBAL_ANTHROPIC_CLIENT is not None:
+                    self._client = GLOBAL_ANTHROPIC_CLIENT
+                    logger.info("Использован существующий глобальный экземпляр клиента Anthropic")
+                    return
+                
                 try:
                     # Пробуем инициализировать клиент напрямую
                     import anthropic
-                    original_Anthropic = anthropic.Anthropic
-                    self._client = original_Anthropic(*self._args, **self._kwargs)
-                    logger.info("Успешно инициализирован клиент Anthropic API")
+                    # Сохраняем ссылку на оригинальный класс перед патчем
+                    if hasattr(anthropic, '_original_Anthropic'):
+                        original_class = anthropic._original_Anthropic
+                        self._client = original_class(*self._args, **self._kwargs)
+                        logger.info("Успешно инициализирован клиент Anthropic API с использованием оригинального класса")
+                    else:
+                        logger.warning("Оригинальный класс Anthropic не найден, использую шаблонный ответ")
+                        self._client = None
                 except Exception as e:
                     logger.warning(f"Не удалось инициализировать клиент Anthropic API: {e}")
                     self._client = None
@@ -143,21 +177,27 @@ def patch_anthropic_module():
                 """
                 Прокси для методов клиента Anthropic API
                 """
+                # Избегаем рекурсии при запросе стандартных атрибутов
+                if name.startswith('_'):
+                    raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+                
                 if name == 'messages':
                     if self._messages is None:
                         self._messages = MockResponse()
                     return self._messages
                 
                 if self._client is None:
-                    # Попытка повторной инициализации
-                    self._try_init_client()
+                    # Попытка повторной инициализации только один раз
+                    if not hasattr(self, '_init_tried'):
+                        self._init_tried = True
+                        self._try_init_client()
                 
                 if self._client is not None:
                     return getattr(self._client, name)
                 
-                # Возвращаем самого себя для цепочки вызовов
+                # Для нестандартных атрибутов возвращаем MockResponse вместо self
                 logger.warning(f"Запрошен отсутствующий атрибут: {name}, возвращаем Mock")
-                return self
+                return MockResponse()
             
             def __call__(self, *args, **kwargs):
                 """
@@ -179,6 +219,8 @@ def patch_anthropic_module():
         if hasattr(anthropic, 'Anthropic'):
             # Сохраняем оригинальный класс
             original_Anthropic = anthropic.Anthropic
+            # Сохраняем ссылку на оригинальный класс для использования в _try_init_client
+            anthropic._original_Anthropic = original_Anthropic
             
             # Заменяем класс Anthropic на нашу обертку
             anthropic.Anthropic = CompatAnthropicWrapper
@@ -189,6 +231,7 @@ def patch_anthropic_module():
                 anthropic.messages = MockResponse()
             
             logger.info("Модуль anthropic успешно патчен: класс Anthropic заменен на CompatAnthropicWrapper")
+            ANTHROPIC_PATCHED = True
             return True
         else:
             logger.warning("Модуль anthropic не содержит класса Anthropic, патч не применен")
@@ -316,10 +359,27 @@ def main():
     
     # Импортируем все необходимые классы перед модификацией OptimizationBot
     try:
+        # Импортируем все необходимые классы один раз в начале
+        imported_classes = {}
+        
         # Импортируем сначала необходимые классы
-        from script_validator import ScriptValidator
-        from script_metrics import ScriptMetrics
-        from prompt_optimizer import PromptOptimizer
+        try:
+            from script_validator import ScriptValidator
+            imported_classes['ScriptValidator'] = ScriptValidator
+        except ImportError:
+            logger.warning("Не удалось импортировать ScriptValidator")
+        
+        try:
+            from script_metrics import ScriptMetrics
+            imported_classes['ScriptMetrics'] = ScriptMetrics
+        except ImportError:
+            logger.warning("Не удалось импортировать ScriptMetrics")
+        
+        try:
+            from prompt_optimizer import PromptOptimizer
+            imported_classes['PromptOptimizer'] = PromptOptimizer
+        except ImportError:
+            logger.warning("Не удалось импортировать PromptOptimizer")
         
         # Импортируем модуль optimization_bot
         from optimization_bot import OptimizationBot
@@ -331,22 +391,44 @@ def main():
             """Патченный метод инициализации, который использует наш обертку Anthropic"""
             import anthropic
             self.api_key = api_key
-            self.validator = validator or ScriptValidator()
-            self.metrics = ScriptMetrics()
-            self.prompt_optimizer = PromptOptimizer(metrics=self.metrics)
+            
+            # Используем импортированные классы из словаря
+            self.validator = validator or imported_classes.get('ScriptValidator', lambda: None)()
+            self.metrics = imported_classes.get('ScriptMetrics', lambda: None)()
+            
+            # Создаем prompt_optimizer только если есть ScriptMetrics
+            if 'PromptOptimizer' in imported_classes and self.metrics is not None:
+                self.prompt_optimizer = imported_classes['PromptOptimizer'](metrics=self.metrics)
+                self.prompts = self.prompt_optimizer.get_optimized_prompts()
+            else:
+                self.prompt_optimizer = None
+                self.prompts = {}
             
             # Используем патченную версию Anthropic
             logger.info("Инициализация OptimizationBot с патченной версией Anthropic")
-            try:
-                self.client = anthropic.Anthropic(api_key=api_key)
-                logger.info("Успешно создан экземпляр патченного клиента Anthropic")
-            except Exception as e:
-                logger.error(f"Ошибка при создании патченного клиента Anthropic: {e}")
-                # Используем прямое присваивание модуля
-                self.client = anthropic
-                logger.warning("Используется запасной вариант - прямое присваивание модуля anthropic")
             
-            self.prompts = self.prompt_optimizer.get_optimized_prompts()
+            # Проверяем, есть ли глобальный экземпляр клиента
+            if 'GLOBAL_ANTHROPIC_CLIENT' in globals() and GLOBAL_ANTHROPIC_CLIENT is not None:
+                self.client = anthropic.Anthropic(api_key=api_key)  # При вызове вернется существующий экземпляр
+                logger.info("Использован существующий глобальный экземпляр клиента Anthropic")
+            else:
+                try:
+                    # Используем клиент непосредственно без повторной инициализации обертки
+                    if hasattr(anthropic, '_original_Anthropic'):
+                        # Нет необходимости создавать обертку снова, так как она уже создана
+                        # и заменила собой класс Anthropic
+                        self.client = anthropic.Anthropic(api_key=api_key)
+                        logger.info("Успешно создан экземпляр патченного клиента Anthropic")
+                    else:
+                        # Если по какой-то причине замена класса не произошла,
+                        # используем прямое присваивание модуля
+                        logger.warning("Оригинальный класс Anthropic не сохранен, использую модуль напрямую")
+                        self.client = anthropic
+                except Exception as e:
+                    logger.error(f"Ошибка при создании патченного клиента Anthropic: {e}")
+                    # Используем прямое присваивание модуля в случае ошибки
+                    self.client = anthropic
+                    logger.warning("Используется запасной вариант - прямое присваивание модуля anthropic")
         
         # Заменяем метод инициализации
         OptimizationBot.__init__ = patched_init
